@@ -245,6 +245,73 @@ async function resolveAudioBufferForElement({
 	}
 }
 
+/**
+ * Demuxes just the audio track out of a media file (typically a video
+ * container) using mediabunny, without any resampling. Native
+ * `AudioContext.decodeAudioData` cannot reliably decode audio out of a muxed
+ * video container (it expects a plain audio bitstream), so this is the only
+ * path that works for waveform generation on the audio of a video source.
+ */
+export async function decodeAudioTrackFromFile({
+	file,
+}: {
+	file: File;
+}): Promise<AudioBuffer | null> {
+	const input = new Input({
+		source: new BlobSource(file),
+		formats: ALL_FORMATS,
+	});
+
+	try {
+		const audioTrack = await input.getPrimaryAudioTrack();
+		if (!audioTrack) return null;
+
+		const sink = new AudioBufferSink(audioTrack);
+		const chunks: AudioBuffer[] = [];
+		let totalSamples = 0;
+
+		for await (const { buffer } of sink.buffers(0)) {
+			chunks.push(buffer);
+			totalSamples += buffer.length;
+		}
+
+		if (chunks.length === 0) return null;
+
+		const nativeSampleRate = chunks[0].sampleRate;
+		const numChannels = Math.min(
+			MAX_AUDIO_CHANNELS,
+			chunks[0].numberOfChannels,
+		);
+
+		const audioContext = createAudioContext();
+		try {
+			const nativeBuffer = audioContext.createBuffer(
+				numChannels,
+				totalSamples,
+				nativeSampleRate,
+			);
+			let offset = 0;
+			for (const chunk of chunks) {
+				for (let channel = 0; channel < numChannels; channel++) {
+					const sourceData = chunk.getChannelData(
+						Math.min(channel, chunk.numberOfChannels - 1),
+					);
+					nativeBuffer.copyToChannel(sourceData, channel, offset);
+				}
+				offset += chunk.length;
+			}
+			return nativeBuffer;
+		} finally {
+			void audioContext.close();
+		}
+	} catch (error) {
+		console.warn("Failed to demux audio track from file:", error);
+		return null;
+	} finally {
+		input.dispose();
+	}
+}
+
 async function resolveAudioBufferForAsset({
 	asset,
 	audioContext,

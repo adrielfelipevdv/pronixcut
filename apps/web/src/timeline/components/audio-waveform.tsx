@@ -44,6 +44,7 @@ function sampleGainAtClipTime({
 interface AudioWaveformProps {
 	sourceKey: string;
 	sourceFile?: File;
+	sourceFileIsVideo?: boolean;
 	audioUrl?: string;
 	audioBuffer?: AudioBuffer;
 	gainSamples?: number[];
@@ -59,6 +60,7 @@ interface AudioWaveformProps {
 export function AudioWaveform({
 	sourceKey,
 	sourceFile,
+	sourceFileIsVideo,
 	audioUrl,
 	audioBuffer,
 	gainSamples,
@@ -287,6 +289,7 @@ export function AudioWaveform({
 				sourceKey,
 				audioBuffer,
 				sourceFile,
+				sourceFileIsVideo,
 				audioUrl,
 			})
 			.then((summary) => {
@@ -307,7 +310,15 @@ export function AudioWaveform({
 		return () => {
 			isCancelled = true;
 		};
-	}, [audioBuffer, audioUrl, clearCanvas, drawVisible, sourceFile, sourceKey]);
+	}, [
+		audioBuffer,
+		audioUrl,
+		clearCanvas,
+		drawVisible,
+		sourceFile,
+		sourceFileIsVideo,
+		sourceKey,
+	]);
 
 	useLayoutEffect(() => {
 		drawVisible();

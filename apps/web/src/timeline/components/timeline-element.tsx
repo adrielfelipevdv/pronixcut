@@ -1003,6 +1003,8 @@ function AudioElementContent({
 		element.sourceType === "library" ? element.sourceUrl : mediaAsset?.url;
 	const sourceFile =
 		element.sourceType === "upload" ? mediaAsset?.file : undefined;
+	const sourceFileIsVideo =
+		element.sourceType === "upload" ? mediaAsset?.type === "video" : false;
 	const sourceKey =
 		element.sourceType === "upload"
 			? buildWaveformSourceKey({ kind: "media", id: element.mediaId })
@@ -1024,6 +1026,7 @@ function AudioElementContent({
 					<AudioWaveform
 						sourceKey={sourceKey}
 						sourceFile={sourceFile}
+						sourceFileIsVideo={sourceFileIsVideo}
 						audioBuffer={audioBuffer}
 						audioUrl={audioUrl}
 						gainSamples={gainSamples}
