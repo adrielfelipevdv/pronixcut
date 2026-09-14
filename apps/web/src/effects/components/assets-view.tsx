@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { PanelView } from "@/components/editor/panels/assets/views/base-panel";
 import { DraggableItem } from "@/components/editor/panels/assets/draggable-item";
@@ -17,39 +17,29 @@ import { COLOR_GRADE_EFFECT_TYPE } from "@/effects/color-grade/definition";
 import { useCustomEffectPresetsStore, type CustomColorGradePreset } from "@/effects/color-grade/custom-presets-store";
 import { ColorGradeEditorDialog } from "@/effects/color-grade/components/color-grade-editor-dialog";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { Delete02Icon, PlusSignIcon, Refresh01Icon } from "@hugeicons/core-free-icons";
+import { Delete02Icon, PlusSignIcon } from "@hugeicons/core-free-icons";
 import { BackgroundContent } from "@/components/editor/panels/assets/views/settings/background";
 
 export function EffectsView() {
-	const editor = useEditor();
 	const allDefinitions = effectsRegistry.getAll();
 	const gpuEffects = allDefinitions.filter((definition) => !isCanvas2DEffect({ definition }));
 	const customPresets = useCustomEffectPresetsStore((s) => s.presets);
 	const loadCustomPresets = useCustomEffectPresetsStore((s) => s.load);
 	const removeCustomPreset = useCustomEffectPresetsStore((s) => s.remove);
 	const [dialogOpen, setDialogOpen] = useState(false);
-	const selectedElementId = useEditor(
-		(e) => e.selection.getSelectedElements()[0]?.elementId ?? null,
-	);
 
 	useEffect(() => {
 		loadCustomPresets();
 	}, [loadCustomPresets]);
 
-	const captureReferenceFrame = useCallback(async () => {
-		// One-shot render of the current frame — same mechanism as the
-		// snapshot/copy-frame feature, not run continuously. Real thumbnails
-		// of the project being edited instead of the generic stock photo.
-		const canvas = await editor.renderer.captureCurrentFrameCanvas();
-		effectPreviewService.setReferenceFrame({ source: canvas });
-	}, [editor]);
-
-	useEffect(() => {
-		captureReferenceFrame();
-		// Re-captures when the selected clip changes, or once on mount —
-		// never on every playback tick.
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [selectedElementId]);
+	// Every card in this library grid renders against the same standard
+	// reference photo (public/effects/preview.jpg), by design — this used to
+	// also let a click swap in a real captured frame from the project, which
+	// silently broke the "always the same photo" requirement: capturing
+	// before the renderer had produced a real frame (e.g. on mount, or at an
+	// empty moment in the timeline) captured a blank/black canvas that then
+	// permanently overrode the stock photo for every card, session-wide,
+	// making the whole grid look photo-less. Removed.
 
 	return (
 		<PanelView title="Efeitos">
@@ -63,20 +53,9 @@ export function EffectsView() {
 				</section>
 
 				<section className="flex flex-col gap-2">
-					<div className="flex items-center justify-between">
-						<h3 className="text-muted-foreground text-xs font-medium uppercase tracking-wide">
-							Efeitos
-						</h3>
-						<Button
-							variant="text"
-							size="icon"
-							className="size-5"
-							title="Atualizar preview com o frame atual"
-							onClick={captureReferenceFrame}
-						>
-							<HugeiconsIcon icon={Refresh01Icon} className="size-3.5" />
-						</Button>
-					</div>
+					<h3 className="text-muted-foreground text-xs font-medium uppercase tracking-wide">
+						Efeitos
+					</h3>
 					<EffectsGrid effects={gpuEffects} />
 				</section>
 

@@ -82,6 +82,11 @@ function DegradedRendererBanner() {
 // enough that the preview (now the only other panel in the row, since the
 // inspector is suppressed entirely while expanded) claims the rest.
 const EXPANDED_PREVIEW_TOOLS_SIZE = 22;
+// In expanded-preview mode for a vertical (9:16) project, the preview breaks
+// out of the top row entirely and becomes a full-height column on the right
+// — beside the timeline too, not just the tools panel above it. This is how
+// much of the app's width it claims.
+const EXPANDED_PREVIEW_RIGHT_WIDTH = 38;
 // Percentage-point reduction applied to the tools column when the sidebar
 // rail collapses — an approximation of the ~132px (188px → 56px) it frees,
 // expressed as a share of the panel group rather than a fixed pixel width
@@ -96,6 +101,13 @@ function EditorLayout() {
 	const isExpandedPreview = useExpandedPreviewStore((s) => s.isExpanded);
 	const sidebarCollapsed = useAssetsPanelStore((s) => s.sidebarCollapsed);
 	const { selectedElements } = useElementSelection();
+	const canvasSize = useEditor((e) => e.project.getActive()?.settings.canvasSize);
+	const isVerticalProject = !!canvasSize && canvasSize.height > canvasSize.width;
+	// The button that flips isExpandedPreview only ever shows for vertical
+	// projects (see ExpandPreviewButton), but the flag itself persists across
+	// project switches — re-checking the aspect ratio here keeps a stale
+	// "expanded" flag from applying this layout to a horizontal project.
+	const showExpandedRightPreview = isExpandedPreview && isVerticalProject;
 	// The inspector only ever takes up space when there's something for it to
 	// show — never an empty placeholder — and expanded-preview mode
 	// deliberately suppresses it even with a selection, so the vertical video
@@ -183,6 +195,76 @@ function EditorLayout() {
 			),
 		[overlaySource.definitions, overlays],
 	);
+
+	// Expanded preview for a vertical (9:16) project: the preview breaks out
+	// of the top row and becomes a full-height column on the right, beside
+	// the timeline as well — not just the tools panel. Tools + timeline stack
+	// in the remaining left region. The inspector stays suppressed
+	// (showInspector already accounts for isExpandedPreview above). This is a
+	// separate JSX branch rather than forcing one panel tree to handle both
+	// shapes — the timeline and tools panels are still the same components
+	// with the same state, just arranged differently.
+	if (showExpandedRightPreview) {
+		return (
+			<ResizablePanelGroup direction="horizontal" className="size-full gap-2 px-3 pt-2 pb-3">
+				<ResizablePanel
+					defaultSize={100 - EXPANDED_PREVIEW_RIGHT_WIDTH}
+					minSize={30}
+					className="min-h-0 min-w-0"
+				>
+					<ResizablePanelGroup
+						direction="vertical"
+						className="size-full gap-2"
+						onLayout={(sizes) => {
+							setPanel({
+								panel: "mainContent",
+								size: sizes[0] ?? panels.mainContent,
+							});
+							setPanel({
+								panel: "timeline",
+								size: sizes[1] ?? panels.timeline,
+							});
+						}}
+					>
+						<ResizablePanel
+							defaultSize={panels.mainContent}
+							minSize={30}
+							maxSize={85}
+							className="min-h-0 min-w-0"
+						>
+							<AssetsPanel />
+						</ResizablePanel>
+
+						<ResizableHandle withHandle />
+
+						<ResizablePanel
+							defaultSize={panels.timeline}
+							minSize={15}
+							maxSize={70}
+							className="min-h-0"
+						>
+							<Timeline />
+						</ResizablePanel>
+					</ResizablePanelGroup>
+				</ResizablePanel>
+
+				<ResizableHandle withHandle />
+
+				<ResizablePanel
+					defaultSize={EXPANDED_PREVIEW_RIGHT_WIDTH}
+					minSize={25}
+					maxSize={55}
+					className="min-h-0 min-w-0"
+				>
+					<PreviewPanel
+						overlayControls={overlayControls}
+						overlayInstances={overlaySource.instances}
+						onOverlayVisibilityChange={setOverlayVisibility}
+					/>
+				</ResizablePanel>
+			</ResizablePanelGroup>
+		);
+	}
 
 	return (
 		<ResizablePanelGroup
