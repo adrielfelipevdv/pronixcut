@@ -23,6 +23,7 @@ export interface ResolvedVisualNodeState {
 	transform: Transform;
 	opacity: number;
 	effectPasses: EffectPass[][];
+	canvas2dEffects: Effect[];
 }
 
 export interface ResolvedVisualSourceNodeState extends ResolvedVisualNodeState {

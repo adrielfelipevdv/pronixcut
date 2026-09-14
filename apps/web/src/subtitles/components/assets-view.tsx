@@ -23,6 +23,7 @@ import { decodeAudioToFloat32 } from "@/media/audio";
 import { buildCaptionChunks } from "@/transcription/caption";
 import { insertCaptionChunksAsTextTrack } from "@/subtitles/insert";
 import { parseSubtitleFile } from "@/subtitles/parse";
+import { CaptionBlockEditor } from "@/subtitles/components/caption-blocks";
 import { Spinner } from "@/components/ui/spinner";
 import {
 	Section,
@@ -101,10 +102,10 @@ export function Captions() {
 		if (progress.status === "loading-model") {
 			dispatch({
 				type: "update_step",
-				step: `Loading model ${Math.round(progress.progress)}%`,
+				step: `Carregando modelo ${Math.round(progress.progress)}%`,
 			});
 		} else if (progress.status === "transcribing") {
-			dispatch({ type: "update_step", step: "Transcribing..." });
+			dispatch({ type: "update_step", step: "Transcrevendo..." });
 		}
 	};
 
@@ -118,7 +119,7 @@ export function Captions() {
 	};
 
 	const handleGenerateTranscript = async () => {
-		dispatch({ type: "start", step: "Extracting audio..." });
+		dispatch({ type: "start", step: "Extraindo áudio..." });
 		try {
 			const audioBlob = await extractTimelineAudio({
 				tracks: editor.scenes.getActiveScene().tracks,
@@ -126,7 +127,7 @@ export function Captions() {
 				totalDuration: editor.timeline.getTotalDuration(),
 			});
 
-			dispatch({ type: "update_step", step: "Preparing audio..." });
+			dispatch({ type: "update_step", step: "Preparando áudio..." });
 			const { samples } = await decodeAudioToFloat32({
 				audioBlob,
 				sampleRate: DEFAULT_TRANSCRIPTION_SAMPLE_RATE,
@@ -138,11 +139,11 @@ export function Captions() {
 				onProgress: handleProgress,
 			});
 
-			dispatch({ type: "update_step", step: "Generating captions..." });
+			dispatch({ type: "update_step", step: "Gerando legendas..." });
 			const captionChunks = buildCaptionChunks({ segments: result.segments });
 
 			if (!insertCaptions({ captions: captionChunks })) {
-				dispatch({ type: "fail", error: "No captions were generated" });
+				dispatch({ type: "fail", error: "Nenhuma legenda foi gerada" });
 				return;
 			}
 
@@ -164,7 +165,7 @@ export function Captions() {
 	};
 
 	const handleImportFile = async ({ file }: { file: File }) => {
-		dispatch({ type: "start", step: "Reading subtitle file..." });
+		dispatch({ type: "start", step: "Lendo arquivo de legenda..." });
 		try {
 			const input = await file.text();
 			const result = parseSubtitleFile({
@@ -175,22 +176,22 @@ export function Captions() {
 			if (result.captions.length === 0) {
 				dispatch({
 					type: "fail",
-					error: "No valid subtitle cues were found in the subtitle file",
+					error: "Nenhuma legenda válida foi encontrada no arquivo",
 				});
 				return;
 			}
 
-			dispatch({ type: "update_step", step: "Importing subtitles..." });
+			dispatch({ type: "update_step", step: "Importando legendas..." });
 
 			if (!insertCaptions({ captions: result.captions })) {
-				dispatch({ type: "fail", error: "No captions were generated" });
+				dispatch({ type: "fail", error: "Nenhuma legenda foi gerada" });
 				return;
 			}
 
 			const nextWarnings = [...result.warnings];
 			if (result.skippedCueCount > 0) {
 				nextWarnings.unshift(
-					`Imported ${result.captions.length} subtitle cue(s) and skipped ${result.skippedCueCount} malformed cue(s).`,
+					`Importada(s) ${result.captions.length} legenda(s) e ${result.skippedCueCount} inválida(s) foram ignoradas.`,
 				);
 			}
 
@@ -202,7 +203,7 @@ export function Captions() {
 				error:
 					error instanceof Error
 						? error.message
-						: "An unexpected error occurred",
+						: "Ocorreu um erro inesperado",
 			});
 		}
 	};
@@ -239,7 +240,7 @@ export function Captions() {
 
 	return (
 		<PanelView
-			title="Captions"
+			title="Legendas"
 			contentClassName="px-0 flex flex-col h-full"
 			actions={
 				<TooltipProvider>
@@ -268,7 +269,7 @@ export function Captions() {
 							className="items-center justify-center gap-1.5"
 						>
 							<HugeiconsIcon icon={CloudUploadIcon} />
-							Import
+							Importar
 						</Button>
 					</div>
 				</TooltipProvider>
@@ -289,16 +290,16 @@ export function Captions() {
 			>
 				<SectionContent className="flex flex-col gap-4 h-full pt-1">
 					<SectionFields>
-						<SectionField label="Language">
+						<SectionField label="Idioma">
 							<Select
 								value={selectedLanguage}
 								onValueChange={(value) => handleLanguageChange({ value })}
 							>
 								<SelectTrigger>
-									<SelectValue placeholder="Select a language" />
+									<SelectValue placeholder="Selecione um idioma" />
 								</SelectTrigger>
 								<SelectContent>
-									<SelectItem value="auto">Auto detect</SelectItem>
+									<SelectItem value="auto">Detectar automaticamente</SelectItem>
 									{TRANSCRIPTION_LANGUAGES.map((language) => (
 										<SelectItem key={language.code} value={language.code}>
 											{language.name}
@@ -316,7 +317,7 @@ export function Captions() {
 						disabled={isProcessing || activeDiagnostics.length > 0}
 					>
 						{isProcessing && <Spinner className="mr-1" />}
-						{isProcessing ? processing.step : "Generate transcript"}
+						{isProcessing ? processing.step : "Gerar transcrição"}
 					</Button>
 					{error && (
 						<div className="bg-destructive/10 border-destructive/20 rounded-md border p-3">
@@ -334,6 +335,7 @@ export function Captions() {
 					)}
 				</SectionContent>
 			</Section>
+			<CaptionBlockEditor />
 		</PanelView>
 	);
 }

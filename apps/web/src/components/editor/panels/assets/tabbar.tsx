@@ -1,21 +1,28 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-	Tooltip,
-	TooltipContent,
-	TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/utils/ui";
 import {
 	TAB_KEYS,
 	tabs,
 	useAssetsPanelStore,
 } from "@/components/editor/panels/assets/assets-panel-store";
+import {
+	Tooltip,
+	TooltipContent,
+	TooltipProvider,
+	TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { ArrowLeft01Icon, ArrowRight01Icon } from "@hugeicons/core-free-icons";
+
+export const SIDEBAR_EXPANDED_WIDTH_PX = 188;
+export const SIDEBAR_COLLAPSED_WIDTH_PX = 56;
 
 export function TabBar() {
 	const { activeTab, setActiveTab } = useAssetsPanelStore();
+	const collapsed = useAssetsPanelStore((s) => s.sidebarCollapsed);
+	const toggleCollapsed = useAssetsPanelStore((s) => s.toggleSidebarCollapsed);
 	const [showTopFade, setShowTopFade] = useState(false);
 	const [showBottomFade, setShowBottomFade] = useState(false);
 	const scrollRef = useRef<HTMLDivElement>(null);
@@ -46,48 +53,79 @@ export function TabBar() {
 	}, [checkScrollPosition]);
 
 	return (
-		<div className="relative flex">
+		<TooltipProvider delayDuration={200}>
 			<div
-				ref={scrollRef}
-				className="scrollbar-hidden relative flex size-full p-1 flex-col items-center justify-start gap-0.5 overflow-y-auto"
+				className="bg-sidebar border-border relative flex shrink-0 flex-col border-r transition-[width] duration-150 ease-out"
+				style={{
+					width: collapsed
+						? SIDEBAR_COLLAPSED_WIDTH_PX
+						: SIDEBAR_EXPANDED_WIDTH_PX,
+				}}
 			>
-				{TAB_KEYS.map((tabKey) => {
-					const tab = tabs[tabKey];
-					return (
-						<Tooltip key={tabKey} delayDuration={10}>
-							<TooltipTrigger asChild>
-								<Button
-									variant={activeTab === tabKey ? "secondary" : "ghost"}
-									size="icon"
+				<div className="relative min-h-0 flex-1">
+					<div
+						ref={scrollRef}
+						className="scrollbar-hidden relative flex size-full flex-col items-stretch justify-start gap-0.5 overflow-y-auto p-2"
+					>
+						{TAB_KEYS.map((tabKey) => {
+							const tab = tabs[tabKey];
+							const active = activeTab === tabKey;
+							const button = (
+								<button
+									key={tabKey}
+									type="button"
 									aria-label={tab.label}
-									className={cn(
-										"shrink-0",
-										"h-8 w-8",
-										activeTab !== tabKey && "text-muted-foreground",
-									)}
 									onClick={() => setActiveTab(tabKey)}
+									className={cn(
+										"flex h-10 shrink-0 items-center gap-2.5 rounded-md border-l-2 border-transparent text-left text-[13px] font-medium transition-colors duration-150",
+										collapsed ? "justify-center px-0" : "pl-2.5 pr-2",
+										active
+											? "border-l-primary bg-primary/8 text-primary"
+											: "text-muted-foreground hover:bg-accent hover:text-foreground",
+									)}
 								>
-									<tab.icon />
-								</Button>
-							</TooltipTrigger>
-							<TooltipContent
-								side="right"
-								align="center"
-								variant="sidebar"
-								sideOffset={8}
-							>
-								<div className="text-foreground text-sm leading-none font-medium">
-									{tab.label}
-								</div>
-							</TooltipContent>
-						</Tooltip>
-					);
-				})}
-			</div>
+									<tab.icon className="size-5 shrink-0" />
+									{!collapsed && <span className="truncate">{tab.label}</span>}
+								</button>
+							);
 
-			<FadeOverlay direction="top" show={showTopFade} />
-			<FadeOverlay direction="bottom" show={showBottomFade} />
-		</div>
+							if (!collapsed) return button;
+
+							return (
+								<Tooltip key={tabKey}>
+									<TooltipTrigger asChild>{button}</TooltipTrigger>
+									<TooltipContent side="right">{tab.label}</TooltipContent>
+								</Tooltip>
+							);
+						})}
+					</div>
+
+					<FadeOverlay direction="top" show={showTopFade} />
+					<FadeOverlay direction="bottom" show={showBottomFade} />
+				</div>
+
+				<div className="border-border flex shrink-0 justify-center border-t p-1.5">
+					<Tooltip>
+						<TooltipTrigger asChild>
+							<button
+								type="button"
+								onClick={toggleCollapsed}
+								aria-label={collapsed ? "Expandir menu" : "Recolher menu"}
+								className="text-muted-foreground hover:bg-accent hover:text-foreground flex size-8 shrink-0 items-center justify-center rounded-md transition-colors duration-150"
+							>
+								<HugeiconsIcon
+									icon={collapsed ? ArrowRight01Icon : ArrowLeft01Icon}
+									className="size-4"
+								/>
+							</button>
+						</TooltipTrigger>
+						<TooltipContent side="right">
+							{collapsed ? "Expandir menu" : "Recolher menu"}
+						</TooltipContent>
+					</Tooltip>
+				</div>
+			</div>
+		</TooltipProvider>
 	);
 }
 
@@ -103,8 +141,8 @@ function FadeOverlay({
 			className={cn(
 				"pointer-events-none absolute right-0 left-0 h-6",
 				direction === "top" && show
-					? "from-background top-0 bg-linear-to-b to-transparent"
-					: "from-background bottom-0 bg-linear-to-t to-transparent",
+					? "from-sidebar top-0 bg-linear-to-b to-transparent"
+					: "from-sidebar bottom-0 bg-linear-to-t to-transparent",
 			)}
 		/>
 	);

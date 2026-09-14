@@ -49,12 +49,12 @@ export function MobileGate({ children }: MobileGateProps) {
 			<div className="flex flex-1 flex-col justify-center gap-5 px-7">
 				<div className="flex flex-col gap-3">
 					<h1 className="text-foreground text-3xl font-bold tracking-tight">
-						Desktop only (for now)
+						Somente desktop (por enquanto)
 					</h1>
 					<p className="text-muted-foreground text-sm leading-relaxed">
-						OpenCut isn't optimized for mobile or iPad yet. Things will break
-						and the layout will be a mess. Come back on a desktop for the real
-						experience.
+						O PronixCut ainda não está otimizado para celular ou iPad. Coisas
+						vão quebrar e o layout vai ficar bagunçado. Volte em um computador
+						para a experiência completa.
 					</p>
 				</div>
 				<div className="flex items-center gap-3">

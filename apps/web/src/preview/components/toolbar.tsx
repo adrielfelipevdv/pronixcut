@@ -8,8 +8,13 @@ import { EditableTimecode } from "@/components/editable-timecode";
 import { Button } from "@/components/ui/button";
 import {
 	FullScreenIcon,
+	Maximize02Icon,
+	Minimize02Icon,
+	NextIcon,
 	PauseIcon,
 	PlayIcon,
+	PreviousIcon,
+	LayoutRightIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Separator } from "@/components/ui/separator";
@@ -24,6 +29,9 @@ import { PREVIEW_ZOOM_PRESETS } from "@/preview/zoom";
 import { usePreviewViewport } from "./preview-viewport";
 import { GridPopover } from "./guide-popover";
 import { usePreviewStore } from "@/preview/preview-store";
+import { useExpandedPreviewStore } from "@/editor/expanded-preview-store";
+import { useSidePreviewStore } from "@/preview/side-preview-store";
+import { ProjectSettingsPopover } from "./project-settings-popover";
 import type { MediaTime } from "@/wasm";
 
 export function PreviewToolbar({
@@ -51,11 +59,57 @@ export function PreviewToolbar({
 						)}
 					</Button>
 				</GridPopover> */}
+				<SidePreviewToggleButton />
+				<ExpandPreviewButton />
 				<Button variant="text" onClick={onToggleFullscreen}>
 					<HugeiconsIcon icon={FullScreenIcon} />
 				</Button>
+				<ProjectSettingsPopover />
 			</div>
 		</div>
+	);
+}
+
+function SidePreviewToggleButton() {
+	const canvasSize = useEditor((e) => e.project.getActive()?.settings.canvasSize);
+	const isEnabled = useSidePreviewStore((s) => s.isEnabled);
+	const toggle = useSidePreviewStore((s) => s.toggle);
+
+	// Same gate as ExpandPreviewButton — a horizontal project is already
+	// widescreen, so a "show it in 16:9 too" toggle would have nothing to add.
+	const isVertical = !!canvasSize && canvasSize.height > canvasSize.width;
+	if (!isVertical) return null;
+
+	return (
+		<Button
+			variant={isEnabled ? "secondary" : "text"}
+			onClick={toggle}
+			title={isEnabled ? "Ocultar prévia 16:9" : "Mostrar prévia 16:9 ao lado"}
+		>
+			<HugeiconsIcon icon={LayoutRightIcon} />
+		</Button>
+	);
+}
+
+function ExpandPreviewButton() {
+	const canvasSize = useEditor((e) => e.project.getActive()?.settings.canvasSize);
+	const isExpanded = useExpandedPreviewStore((s) => s.isExpanded);
+	const toggle = useExpandedPreviewStore((s) => s.toggle);
+
+	// Mainly relevant for vertical (9:16) projects — a horizontal video
+	// already fills the available width, so the toggle stays hidden there to
+	// avoid a control with no real effect.
+	const isVertical = !!canvasSize && canvasSize.height > canvasSize.width;
+	if (!isVertical) return null;
+
+	return (
+		<Button
+			variant={isExpanded ? "secondary" : "text"}
+			onClick={toggle}
+			title={isExpanded ? "Restaurar layout" : "Expandir prévia"}
+		>
+			<HugeiconsIcon icon={isExpanded ? Minimize02Icon : Maximize02Icon} />
+		</Button>
 	);
 }
 
@@ -102,7 +156,7 @@ function ZoomSelect() {
 	const { isAtFit, zoomPercent, fitToScreen, setViewportPercent } =
 		usePreviewViewport();
 
-	const displayLabel = isAtFit ? "Fit" : `${zoomPercent}%`;
+	const displayLabel = isAtFit ? "Ajustar" : `${zoomPercent}%`;
 
 	const onValueChange = (value: string) => {
 		if (value === "fit") {
@@ -119,7 +173,7 @@ function ZoomSelect() {
 		>
 			<SelectTrigger className="tabular-nums">{displayLabel}</SelectTrigger>
 			<SelectContent>
-				<SelectItem value="fit">Fit</SelectItem>
+				<SelectItem value="fit">Ajustar</SelectItem>
 				<SelectSeparator />
 				{PREVIEW_ZOOM_PRESETS.map((preset) => (
 					<SelectItem key={preset} value={String(preset)}>
@@ -135,12 +189,34 @@ function PlayPauseButton() {
 	const isPlaying = useEditor((e) => e.playback.getIsPlaying());
 
 	return (
-		<Button
-			variant="text"
-			size="icon"
-			onClick={() => invokeAction("toggle-play")}
-		>
-			<HugeiconsIcon icon={isPlaying ? PauseIcon : PlayIcon} />
-		</Button>
+		<div className="flex items-center gap-1">
+			<Button
+				variant="text"
+				size="icon"
+				title="Quadro anterior"
+				onClick={() => invokeAction("frame-step-backward")}
+			>
+				<HugeiconsIcon icon={PreviousIcon} className="size-4" />
+			</Button>
+			<Button
+				variant="text"
+				size="icon"
+				className="bg-accent hover:bg-surface-hover size-9 rounded-full"
+				onClick={() => invokeAction("toggle-play")}
+			>
+				<HugeiconsIcon
+					icon={isPlaying ? PauseIcon : PlayIcon}
+					className="size-4"
+				/>
+			</Button>
+			<Button
+				variant="text"
+				size="icon"
+				title="Próximo quadro"
+				onClick={() => invokeAction("frame-step-forward")}
+			>
+				<HugeiconsIcon icon={NextIcon} className="size-4" />
+			</Button>
+		</div>
 	);
 }

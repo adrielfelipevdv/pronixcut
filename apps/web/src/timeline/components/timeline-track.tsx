@@ -47,8 +47,21 @@ export function TimelineTrackContent({
 }: TimelineTrackContentProps) {
 	const { isElementSelected } = useElementSelection();
 
+	const laneTint =
+		track.type === "audio"
+			? "bg-[#20D98B]/[0.05] border-[#20D98B]/15"
+			: track.type === "text"
+				? "bg-[#3B65D6]/[0.05] border-[#3B65D6]/15"
+				: null;
+
 	return (
 		<div className="relative size-full">
+			{laneTint && (
+				<div
+					aria-hidden
+					className={`pointer-events-none absolute inset-0 rounded-sm border ${laneTint}`}
+				/>
+			)}
 			<button
 				type="button"
 				className="absolute inset-0 m-0 size-full appearance-none border-0 bg-transparent p-0"

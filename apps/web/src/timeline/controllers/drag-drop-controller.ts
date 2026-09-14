@@ -1,4 +1,5 @@
 import type { DragEvent } from "react";
+import type { ParamValues } from "@/params";
 import { processMediaAssets } from "@/media/processing";
 import { showMediaUploadToast } from "@/media/upload-toast";
 import {
@@ -58,6 +59,7 @@ export interface DragDropConfig {
 		trackId: string;
 		elementId: string;
 		effectType: string;
+		initialParams?: ParamValues;
 	}) => void;
 }
 
@@ -466,6 +468,7 @@ export class DragDropController {
 				trackId: target.targetElement.trackId,
 				elementId: target.targetElement.elementId,
 				effectType: dragData.effectType,
+				initialParams: dragData.initialParams,
 			});
 			return;
 		}

@@ -354,6 +354,34 @@ export function OcSquarePlusIcon({
 	);
 }
 
+export function PronixEditorIcon({
+	className = "",
+	size = 22,
+}: IconProps) {
+	return (
+		<svg
+			width={size}
+			height={size}
+			viewBox="0 0 24 24"
+			fill="none"
+			xmlns="http://www.w3.org/2000/svg"
+			aria-hidden
+			className={className}
+		>
+			<title>PronixEditor</title>
+			<path
+				d="M13 2L4 14H11L10 22L20 10H13L14 2Z"
+				stroke="currentColor"
+				strokeWidth="1.6"
+				strokeLinecap="round"
+				strokeLinejoin="round"
+				fill="currentColor"
+				fillOpacity="0.15"
+			/>
+		</svg>
+	);
+}
+
 export function OcRippleIcon({
 	className = "",
 	size = 24,

@@ -1,0 +1,102 @@
+name: Release PronixCut
+
+# Deliberately NOT triggered by every push — only by pushing a version tag
+# (e.g. `git tag v1.0.1 && git push origin v1.0.1`), so ordinary commits to
+# main never ship an update to installed apps. A manual trigger is also
+# available for one-off/test builds that don't publish.
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish this build as a GitHub Release (auto-update feed)"
+        type: boolean
+        default: false
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # electron-builder reads the app version straight from
+      # apps/electron/package.json — nothing hardcoded here. Keep the tag
+      # (vX.Y.Z) and that file's "version" in sync when cutting a release;
+      # electron-updater compares against whatever's actually in that file.
+      - name: Read app version
+        id: app-version
+        shell: bash
+        run: echo "version=$(node -p "require('./apps/electron/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Install Rust wasm target
+        run: rustup target add wasm32-unknown-unknown
+
+      - name: Install wasm-pack
+        uses: jetli/wasm-pack-action@v0.4.0
+        with:
+          version: latest
+
+      - name: Build WASM
+        run: wasm-pack build rust/wasm --target bundler --out-dir pkg
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76
+        with:
+          bun-version: 1.2.18
+
+      - name: Install web app dependencies
+        working-directory: apps/web
+        run: bun install
+
+      - name: Build web app
+        working-directory: apps/web
+        run: bun run build
+
+      # ────────────────────────────────────────────────────────────────
+      # ⚠️ KNOWN GAP — read before enabling real publishing:
+      #
+      # apps/electron/main.js currently runs the web app from a hardcoded
+      # absolute path on one specific development machine
+      # (C:\Users\Cliente\Desktop\opencut-classic), not from a copy bundled
+      # inside the packaged app. That was a deliberate call documented in
+      # main.js itself: Bun installs dependencies as symlinks into a global
+      # store, which breaks Next's portable "standalone" output once copied
+      # elsewhere.
+      #
+      # Until that's fixed (bundling a truly portable, self-contained copy
+      # of apps/web into the Electron package — e.g. a working
+      # `next build` standalone output, or switching the web app's install
+      # to npm/pnpm for that build step), an installer built and published
+      # by this workflow will install fine on another machine but WILL NOT
+      # RUN there, because it still expects that exact source checkout.
+      # Ship this to real users only after that's solved.
+      # ────────────────────────────────────────────────────────────────
+
+      - name: Install Electron app dependencies
+        working-directory: apps/electron
+        run: npm install --no-workspaces
+
+      - name: Build & publish (release)
+        if: startsWith(github.ref, 'refs/tags/v')
+        working-directory: apps/electron
+        run: npm run dist -- --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build only (manual test run, no publish)
+        if: github.event_name == 'workflow_dispatch' && inputs.publish != true
+        working-directory: apps/electron
+        run: npm run dist
+
+      - name: Upload build artifact (manual test run)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: PronixCut-${{ steps.app-version.outputs.version }}-windows
+          path: |
+            apps/electron/dist/*.exe
+            apps/electron/dist/*.exe.blockmap
+            apps/electron/dist/latest.yml

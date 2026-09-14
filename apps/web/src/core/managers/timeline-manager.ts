@@ -15,7 +15,9 @@ import { lastFrameMediaTime, type MediaTime, ZERO_MEDIA_TIME } from "@/wasm";
 import {
 	canElementBeHidden,
 	canElementHaveAudio,
+	hasMediaId,
 } from "@/timeline/element-utils";
+import { canExtractSourceAudio } from "@/timeline/audio-separation";
 import { isElementMuted } from "@/timeline/audio-state";
 import type {
 	AnimationPath,
@@ -86,6 +88,44 @@ export class TimelineManager {
 	insertElement({ element, placement }: InsertElementParams): void {
 		const command = new InsertElementCommand({ element, placement });
 		this.editor.command.execute({ command });
+		this.autoSeparateSourceAudioIfNeeded({
+			element,
+			trackId: command.getTrackId(),
+			elementId: command.getElementId(),
+		});
+	}
+
+	// A newly placed video clip that has its own audio gets that audio split
+	// onto its own linked audio element right away, same as the manual
+	// "Extrair áudio" toolbar action — so audio always arrives as an
+	// independently editable clip instead of silently staying baked into the
+	// video. Runs as its own history entry (a separate undo step from the
+	// insert), same as clicking the toolbar action would.
+	private autoSeparateSourceAudioIfNeeded({
+		element,
+		trackId,
+		elementId,
+	}: {
+		element: InsertElementParams["element"];
+		trackId: string | null;
+		elementId: string;
+	}): void {
+		if (element.type !== "video" || !trackId) return;
+
+		const insertedElement = this.getElementsWithTracks({
+			elements: [{ trackId, elementId }],
+		})[0]?.element;
+		if (!insertedElement) return;
+
+		const mediaAsset = hasMediaId(insertedElement)
+			? (this.editor.media
+					.getAssets()
+					.find((asset) => asset.id === insertedElement.mediaId) ?? null)
+			: null;
+
+		if (!canExtractSourceAudio(insertedElement, mediaAsset)) return;
+
+		this.toggleSourceAudioSeparation({ trackId, elementId });
 	}
 
 	updateElementTrim({
@@ -301,15 +341,18 @@ export class TimelineManager {
 		trackId,
 		elementId,
 		effectType,
+		initialParams,
 	}: {
 		trackId: string;
 		elementId: string;
 		effectType: string;
+		initialParams?: ParamValues;
 	}): string {
 		const command = new AddClipEffectCommand({
 			trackId,
 			elementId,
 			effectType,
+			initialParams,
 		});
 		this.editor.command.execute({ command });
 		return command.getEffectId() ?? "";

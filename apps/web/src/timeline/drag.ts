@@ -32,6 +32,7 @@ export interface EffectDragData extends BaseDragData {
 	type: "effect";
 	effectType: string;
 	targetElementTypes: VisualElement["type"][];
+	initialParams?: ParamValues;
 }
 
 export type TimelineDragData =

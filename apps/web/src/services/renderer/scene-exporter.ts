@@ -37,6 +37,17 @@ const qualityMap = {
 	very_high: QUALITY_VERY_HIGH,
 };
 
+// Audio needs its own bitrate scale — it was previously reusing the video
+// quality tier's bitrate constant directly (a value meant for video, often
+// several Mbps) as the AAC/Opus bitrate, wildly overshooting what audio
+// needs at every tier. These are ordinary, conservative audio bitrates.
+const audioBitrateMap: Record<ExportQuality, number> = {
+	low: 96_000,
+	medium: 128_000,
+	high: 192_000,
+	very_high: 256_000,
+};
+
 export type SceneExporterEvents = {
 	progress: [progress: number];
 	complete: [buffer: ArrayBuffer];
@@ -110,19 +121,21 @@ export class SceneExporter extends EventEmitter<SceneExporterEvents> {
 		if (this.shouldIncludeAudio && this.audioBuffer) {
 			let audioCodec: "aac" | "opus" = this.format === "webm" ? "opus" : "aac";
 
+			const audioBitrate = audioBitrateMap[this.quality];
+
 			if (audioCodec === "aac" && typeof AudioEncoder !== "undefined") {
 				const { supported } = await AudioEncoder.isConfigSupported({
 					codec: "mp4a.40.2",
 					sampleRate: this.audioBuffer.sampleRate,
 					numberOfChannels: this.audioBuffer.numberOfChannels,
-					bitrate: 192000,
+					bitrate: audioBitrate,
 				});
 				if (!supported) audioCodec = "opus";
 			}
 
 			audioSource = new AudioBufferSource({
 				codec: audioCodec,
-				bitrate: qualityMap[this.quality],
+				bitrate: audioBitrate,
 			});
 			output.addAudioTrack(audioSource);
 		}

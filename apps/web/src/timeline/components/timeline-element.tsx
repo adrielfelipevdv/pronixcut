@@ -343,7 +343,7 @@ export function TimelineElement({
 	const sourceAudioLabel =
 		element.type === "video"
 			? getSourceAudioActionLabel({ element })
-			: "Extract audio";
+			: "Extrair áudio";
 	const isElementSourceAudioSeparated =
 		element.type === "video" && isSourceAudioSeparated({ element });
 	const hasKeyframes = elementKeyframes.length > 0;
@@ -477,7 +477,7 @@ export function TimelineElement({
 								toggleElementExpanded(element.id);
 							}}
 						>
-							{isExpanded ? "Collapse keyframes" : "Expand keyframes"}
+							{isExpanded ? "Recolher keyframes" : "Expandir keyframes"}
 						</ContextMenuItem>
 					)}
 					{selectedElements.length === 1 && hasMediaId(element) && (
@@ -488,13 +488,13 @@ export function TimelineElement({
 									handleRevealInMedia({ event })
 								}
 							>
-								Reveal media
+								Mostrar na biblioteca
 							</ContextMenuItem>
 							<ContextMenuItem
 								icon={<HugeiconsIcon icon={Exchange01Icon} />}
 								disabled
 							>
-								Replace media
+								Substituir mídia
 							</ContextMenuItem>
 						</>
 					)}
@@ -564,7 +564,7 @@ function ElementInner({
 				style={
 					isSelected
 						? {
-								boxShadow: `0 0 0 ${ELEMENT_RING_WIDTH_PX}px var(--primary)`,
+								boxShadow: `0 0 0 ${ELEMENT_RING_WIDTH_PX}px var(--primary), 0 0 10px rgba(255, 198, 0, 0.35)`,
 							}
 						: undefined
 				}
@@ -722,7 +722,7 @@ function KeyframeIndicators({
 						indicatorTime: indicator.time,
 					})
 				}
-				aria-label="Select keyframe"
+				aria-label="Selecionar keyframe"
 			>
 				<HugeiconsIcon
 					icon={KeyframeIcon}
@@ -875,7 +875,7 @@ function ExpandedKeyframeLanes({
 											indicatorTime: kf.time,
 										});
 									}}
-									aria-label="Select keyframe"
+									aria-label="Selecionar keyframe"
 								>
 									<HugeiconsIcon
 										icon={KeyframeIcon}
@@ -1105,7 +1105,11 @@ function TiledMediaContent({
 	}
 
 	const trackHeight = getTrackHeight({ type: track.type });
-	const tileWidth = trackHeight * THUMBNAIL_ASPECT_RATIO;
+	const mediaAspectRatio =
+		mediaAsset?.width && mediaAsset?.height
+			? mediaAsset.width / mediaAsset.height
+			: THUMBNAIL_ASPECT_RATIO;
+	const tileWidth = trackHeight * mediaAspectRatio;
 
 	return (
 		<>
@@ -1214,7 +1218,7 @@ function MuteMenuItem({
 
 	return (
 		<ActionMenuItem action="toggle-elements-muted-selected" icon={getIcon()}>
-			{isMuted ? "Unmute" : "Mute"}
+			{isMuted ? "Ativar som" : "Silenciar"}
 		</ActionMenuItem>
 	);
 }
@@ -1246,7 +1250,7 @@ function VisibilityMenuItem({
 			action="toggle-elements-visibility-selected"
 			icon={getIcon()}
 		>
-			{isHidden ? "Show" : "Hide"}
+			{isHidden ? "Mostrar" : "Ocultar"}
 		</ActionMenuItem>
 	);
 }
@@ -1269,8 +1273,8 @@ function DeleteMenuItem({
 			icon={<HugeiconsIcon icon={Delete02Icon} />}
 		>
 			{isMultipleSelected && isCurrentElementSelected
-				? `Delete ${selectedCount} elements`
-				: `Delete ${elementType === "text" ? "text" : "clip"}`}
+				? `Excluir ${selectedCount} elementos`
+				: `Excluir ${elementType === "text" ? "texto" : "elemento"}`}
 		</ActionMenuItem>
 	);
 }

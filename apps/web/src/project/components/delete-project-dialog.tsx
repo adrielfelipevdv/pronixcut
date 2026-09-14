@@ -38,33 +38,33 @@ export function DeleteProjectDialog({
 					<DialogTitle>
 						{singleName ? (
 							<>
-								{"Delete '"}
+								{"Excluir '"}
 								<span className="inline-block max-w-[300px] truncate align-bottom">
 									{singleName}
 								</span>
 								{"'?"}
 							</>
 						) : (
-							`Delete ${count} projects?`
+							`Excluir ${count} projetos?`
 						)}
 					</DialogTitle>
 				</DialogHeader>
 				<DialogBody>
 					<Alert variant="destructive">
-						<AlertTitle>Warning</AlertTitle>
+						<AlertTitle>Atenção</AlertTitle>
 						<AlertDescription>
-							This will permanently delete{" "}
-							{singleName ? `"${singleName}"` : `${count} projects`} and all
-							associated files.
+							Isso excluirá permanentemente{" "}
+							{singleName ? `"${singleName}"` : `${count} projetos`} e todos os
+							arquivos associados.
 						</AlertDescription>
 					</Alert>
 					<div className="flex flex-col gap-3">
 						<Label className="text-xs font-semibold text-slate-500">
-							Type "DELETE" to confirm
+							Digite "EXCLUIR" para confirmar
 						</Label>
 						<Input
 							type="text"
-							placeholder="DELETE"
+							placeholder="EXCLUIR"
 							size="lg"
 							variant="destructive"
 						/>
@@ -72,10 +72,10 @@ export function DeleteProjectDialog({
 				</DialogBody>
 				<DialogFooter>
 					<Button variant="outline" onClick={() => onOpenChange(false)}>
-						Cancel
+						Cancelar
 					</Button>
 					<Button variant="destructive" onClick={onConfirm}>
-						Delete project
+						Excluir projeto
 					</Button>
 				</DialogFooter>
 			</DialogContent>

@@ -23,6 +23,8 @@ import {
 	PreviewViewportProvider,
 	usePreviewViewportState,
 } from "./preview-viewport";
+import { SidePreviewPane } from "./side-preview";
+import { useSidePreviewStore } from "@/preview/side-preview-store";
 
 function usePreviewSize() {
 	const canvasSize = useEditor(
@@ -78,7 +80,7 @@ export function PreviewPanel({
 	return (
 		<div
 			ref={handleContainerRef}
-			className="panel bg-background relative flex size-full min-h-0 min-w-0 flex-col rounded-sm border"
+			className="panel bg-background border-border relative flex size-full min-h-0 min-w-0 flex-col overflow-hidden rounded-[10px] border"
 		>
 			<PreviewCanvas
 				container={container}
@@ -88,6 +90,39 @@ export function PreviewPanel({
 				onOverlayVisibilityChange={onOverlayVisibilityChange}
 			/>
 			<RenderTreeController />
+		</div>
+	);
+}
+
+function gcd({ a, b }: { a: number; b: number }): number {
+	return b === 0 ? a : gcd({ a: b, b: a % b });
+}
+
+function formatAspectRatioLabel({
+	width,
+	height,
+}: {
+	width?: number;
+	height?: number;
+}): string | null {
+	if (!width || !height) return null;
+	const divisor = gcd({ a: Math.round(width), b: Math.round(height) }) || 1;
+	return `${Math.round(width / divisor)}:${Math.round(height / divisor)}`;
+}
+
+function AspectRatioBadge({
+	width,
+	height,
+}: {
+	width?: number;
+	height?: number;
+}) {
+	const label = formatAspectRatioLabel({ width, height });
+	if (!label) return null;
+
+	return (
+		<div className="bg-elevated/90 border-border text-muted-foreground pointer-events-none absolute top-3 left-3 z-10 flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-medium backdrop-blur-sm">
+			{label}
 		</div>
 	);
 }
@@ -206,7 +241,16 @@ function PreviewCanvas({
 		lastFrameRef.current = frame;
 		renderer
 			.render({ node: renderTree, time: renderTime })
-			.then(() => {
+			.catch((error) => {
+				// A single failed frame (decoder hiccup, GPU texture upload
+				// failure, transient OOM) must never permanently wedge playback.
+				// Without this catch, a rejection here left renderingRef stuck
+				// `true` forever — every later RAF tick would bail out at the
+				// guard above, freezing the canvas on the last good frame while
+				// the playhead/timecode kept advancing normally.
+				console.error("Preview render failed:", error);
+			})
+			.finally(() => {
 				renderingRef.current = false;
 			});
 	}, [renderer, renderTree, editor.playback, editor.timeline]);
@@ -298,10 +342,19 @@ function PreviewCanvas({
 		};
 	}, [canPan, panByScreenDelta, scaleZoom]);
 
+	const isVertical = nativeHeight !== undefined && nativeWidth !== undefined
+		? nativeHeight > nativeWidth
+		: false;
+	const isSidePreviewEnabled = useSidePreviewStore((s) => s.isEnabled);
+	const setSidePreviewEnabled = useSidePreviewStore((s) => s.setEnabled);
+	const showSidePreview = isVertical && isSidePreviewEnabled;
+
 	return (
 		<PreviewViewportProvider value={viewport}>
 			<div className="flex size-full min-h-0 min-w-0 flex-col">
-				<div className="flex min-h-0 min-w-0 flex-1 p-2 pb-0">
+				<div className="relative flex min-h-0 min-w-0 flex-1 gap-2 p-2 pb-0">
+					<div className="relative flex min-h-0 min-w-0 flex-1">
+					<AspectRatioBadge width={nativeWidth} height={nativeHeight} />
 					<ContextMenu>
 						<ContextMenuTrigger asChild>
 							<div
@@ -340,6 +393,13 @@ function PreviewCanvas({
 							onOverlayVisibilityChange={onOverlayVisibilityChange}
 						/>
 					</ContextMenu>
+					</div>
+					{showSidePreview && (
+						<SidePreviewPane
+							sourceCanvas={renderer.getOutputCanvas()}
+							onClose={() => setSidePreviewEnabled(false)}
+						/>
+					)}
 				</div>
 				<PreviewToolbar onToggleFullscreen={onToggleFullscreen} />
 			</div>

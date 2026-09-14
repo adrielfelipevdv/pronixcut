@@ -2,63 +2,131 @@
 
 import { Button } from "../ui/button";
 import { useRef, useState } from "react";
-import {
-	DropdownMenu,
-	DropdownMenuContent,
-	DropdownMenuItem,
-	DropdownMenuSeparator,
-	DropdownMenuTrigger,
-} from "../ui/dropdown-menu";
-import Link from "next/link";
-import { RenameProjectDialog } from "@/project/components/rename-project-dialog";
-import { DeleteProjectDialog } from "@/project/components/delete-project-dialog";
 import { useRouter } from "next/navigation";
-import { FaDiscord } from "react-icons/fa6";
 import { ExportButton } from "./export-button";
 import { FeedbackPopover } from "@/feedback/components/feedback-popover";
 import { ThemeToggle } from "../theme-toggle";
-import { DEFAULT_LOGO_URL } from "@/site/brand";
-import { SOCIAL_LINKS } from "@/site/social";
 import { toast } from "sonner";
 import { useEditor } from "@/editor/use-editor";
-import { CommandIcon, Logout05Icon } from "@hugeicons/core-free-icons";
-import { HugeiconsIcon } from "@hugeicons/react";
-import { ShortcutsDialog } from "@/actions/components/shortcuts-dialog";
 import Image from "next/image";
 import { cn } from "@/utils/ui";
+import { HugeiconsIcon } from "@hugeicons/react";
+import {
+	ArrowTurnBackwardIcon,
+	ArrowTurnForwardIcon,
+	KeyboardIcon,
+} from "@hugeicons/core-free-icons";
+import { ShortcutsDialog } from "@/actions/components/shortcuts-dialog";
+import { AboutPopover } from "@/updater/components/about-popover";
 
 export function EditorHeader() {
 	return (
-		<header className="bg-background flex h-[3.4rem] items-center justify-between px-3 pt-0.5">
-			<div className="flex items-center gap-1">
-				<ProjectDropdown />
+		<header className="bg-background border-border flex h-[60px] items-center justify-between gap-3 border-b px-3">
+			<div className="flex min-w-0 items-center gap-2">
+				<HomeButton />
+				<span className="mr-1 ml-0.5 hidden text-[13px] font-bold tracking-wide select-none sm:inline">
+					<span className="text-foreground">PRONIX</span>
+					<span className="text-primary">CUT</span>
+				</span>
+				<span className="bg-border mr-1 h-6 w-px shrink-0" />
 				<EditableProjectName />
+				<SaveStatus />
 			</div>
-			<nav className="flex items-center gap-2">
+			<nav className="flex shrink-0 items-center gap-1">
+				<HistoryControls />
+				<span className="bg-border mx-1.5 h-6 w-px" />
+				<ShortcutsButton />
 				<FeedbackPopover />
 				<ExportButton />
 				<ThemeToggle />
+				<AboutPopover />
 			</nav>
 		</header>
 	);
 }
 
-function ProjectDropdown() {
-	const [openDialog, setOpenDialog] = useState<
-		"delete" | "rename" | "shortcuts" | null
-	>(null);
+function ShortcutsButton() {
+	const [isOpen, setIsOpen] = useState(false);
+
+	return (
+		<>
+			<Button
+				variant="ghost"
+				size="icon"
+				className="size-8 rounded-md"
+				onClick={() => setIsOpen(true)}
+				title="Atalhos"
+			>
+				<HugeiconsIcon icon={KeyboardIcon} className="size-4" />
+			</Button>
+			<ShortcutsDialog isOpen={isOpen} onOpenChange={setIsOpen} />
+		</>
+	);
+}
+
+function SaveStatus() {
+	const isDirty = useEditor((e) => e.save.getIsDirty());
+
+	return (
+		<span className="text-subtle ml-1 hidden items-center gap-1.5 text-[12px] select-none md:flex">
+			<span
+				className={cn(
+					"size-1.5 rounded-full transition-colors duration-200",
+					isDirty ? "bg-subtle" : "bg-success",
+				)}
+			/>
+			{isDirty ? "Salvando…" : "Salvo automaticamente"}
+		</span>
+	);
+}
+
+function HistoryControls() {
+	const editor = useEditor();
+	const canUndo = useEditor((e) => e.command.canUndo());
+	const canRedo = useEditor((e) => e.command.canRedo());
+
+	return (
+		<div className="flex items-center gap-0.5">
+			<Button
+				variant="ghost"
+				size="icon"
+				className="size-8 rounded-md"
+				disabled={!canUndo}
+				onClick={() => editor.command.undo()}
+				title="Desfazer (Ctrl+Z)"
+			>
+				<HugeiconsIcon icon={ArrowTurnBackwardIcon} className="size-4" />
+			</Button>
+			<Button
+				variant="ghost"
+				size="icon"
+				className="size-8 rounded-md"
+				disabled={!canRedo}
+				onClick={() => editor.command.redo()}
+				title="Refazer (Ctrl+Shift+Z)"
+			>
+				<HugeiconsIcon icon={ArrowTurnForwardIcon} className="size-4" />
+			</Button>
+		</div>
+	);
+}
+
+// The P logo now works as a direct "go Home" button (was previously a
+// dropdown with Exit project/Shortcuts/Discord — Shortcuts moved to
+// Configurações, Discord removed, and "Exit project" is just what clicking
+// this button already does). Reuses the exact same safe-exit sequence the
+// old "Exit project" item used, so no unsaved state is lost going Home.
+function HomeButton() {
 	const [isExiting, setIsExiting] = useState(false);
 	const router = useRouter();
 	const editor = useEditor();
-	const activeProject = useEditor((e) => e.project.getActive());
 
-	const handleExit = async () => {
+	const handleGoHome = async () => {
 		if (isExiting) return;
 		setIsExiting(true);
 
 		try {
 			await editor.project.prepareExit();
-			editor.project.closeProject();
 		} catch (error) {
 			console.error("Failed to prepare project exit:", error);
 		} finally {
@@ -67,106 +135,23 @@ function ProjectDropdown() {
 		}
 	};
 
-	const handleSaveProjectName = async (newName: string) => {
-		if (
-			activeProject &&
-			newName.trim() &&
-			newName !== activeProject.metadata.name
-		) {
-			try {
-				await editor.project.renameProject({
-					id: activeProject.metadata.id,
-					name: newName.trim(),
-				});
-			} catch (error) {
-				toast.error("Failed to rename project", {
-					description:
-						error instanceof Error ? error.message : "Please try again",
-				});
-			} finally {
-				setOpenDialog(null);
-			}
-		}
-	};
-
-	const handleDeleteProject = async () => {
-		if (activeProject) {
-			try {
-				await editor.project.deleteProjects({
-					ids: [activeProject.metadata.id],
-				});
-				router.push("/projects");
-			} catch (error) {
-				toast.error("Failed to delete project", {
-					description:
-						error instanceof Error ? error.message : "Please try again",
-				});
-			} finally {
-				setOpenDialog(null);
-			}
-		}
-	};
-
 	return (
-		<>
-			<DropdownMenu>
-				<DropdownMenuTrigger asChild>
-					<Button variant="ghost" size="icon" className="p-1 rounded-sm size-8">
-						<Image
-							src={DEFAULT_LOGO_URL}
-							alt="Project thumbnail"
-							width={32}
-							height={32}
-							className="invert dark:invert-0 size-5"
-						/>
-					</Button>
-				</DropdownMenuTrigger>
-				<DropdownMenuContent align="start" className="z-100 w-44">
-					<DropdownMenuItem
-						onClick={handleExit}
-						disabled={isExiting}
-						icon={<HugeiconsIcon icon={Logout05Icon} />}
-					>
-						Exit project
-					</DropdownMenuItem>
-
-					<DropdownMenuItem
-						onClick={() => setOpenDialog("shortcuts")}
-						icon={<HugeiconsIcon icon={CommandIcon} />}
-					>
-						Shortcuts
-					</DropdownMenuItem>
-
-					<DropdownMenuSeparator />
-
-					<DropdownMenuItem asChild icon={<FaDiscord className="size-4!" />}>
-						<Link
-							href={SOCIAL_LINKS.discord}
-							target="_blank"
-							rel="noopener noreferrer"
-						>
-							Discord
-						</Link>
-					</DropdownMenuItem>
-				</DropdownMenuContent>
-			</DropdownMenu>
-			<RenameProjectDialog
-				isOpen={openDialog === "rename"}
-				onOpenChange={(isOpen) => setOpenDialog(isOpen ? "rename" : null)}
-				onConfirm={(newName) => handleSaveProjectName(newName)}
-				projectName={activeProject?.metadata.name || ""}
+		<Button
+			variant="ghost"
+			size="icon"
+			className="p-1 rounded-sm size-8"
+			onClick={handleGoHome}
+			disabled={isExiting}
+			title="Voltar para a Home do PronixCut"
+		>
+			<Image
+				src="/logos/pronix-p.png"
+				alt="PronixCut"
+				width={32}
+				height={32}
+				className="size-5 object-contain"
 			/>
-			<DeleteProjectDialog
-				isOpen={openDialog === "delete"}
-				onOpenChange={(isOpen) => setOpenDialog(isOpen ? "delete" : null)}
-				onConfirm={handleDeleteProject}
-				projectNames={[activeProject?.metadata.name || ""]}
-			/>
-			<ShortcutsDialog
-				isOpen={openDialog === "shortcuts"}
-				onOpenChange={(isOpen) => setOpenDialog(isOpen ? "shortcuts" : null)}
-			/>
-		</>
+		</Button>
 	);
 }
 
@@ -206,9 +191,9 @@ function EditableProjectName() {
 					name: newName,
 				});
 			} catch (error) {
-				toast.error("Failed to rename project", {
+				toast.error("Falha ao renomear projeto", {
 					description:
-						error instanceof Error ? error.message : "Please try again",
+						error instanceof Error ? error.message : "Tente novamente",
 				});
 			}
 		}

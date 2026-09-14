@@ -179,35 +179,56 @@ export class PlayheadController {
 	/**
 	 * Updates the playhead position and auto-scrolls to keep the playhead
 	 * visible during playback.
+	 *
+	 * All DOM reads (scrollLeft/clientWidth/scrollWidth) happen before any
+	 * DOM writes (style.left / scrollLeft assignment). Interleaving reads
+	 * and writes here would force a synchronous layout recalculation on
+	 * every playback tick (30-60x/sec) — a real, measurable source of
+	 * jank during playback, not just a style concern.
 	 */
 	handlePlaybackUpdate(time: MediaTime): void {
-		this.updatePlayheadLeft(time);
-
-		// Auto-scroll only during playback, not while scrubbing.
-		if (!this.config.getIsPlaying() || this.session.kind === "scrubbing")
-			return;
-
+		const playheadEl = this.config.getPlayheadEl();
 		const rulerViewport = this.config.getRulerScrollEl();
-		const tracksViewport = this.config.getTracksScrollEl();
-		if (!rulerViewport || !tracksViewport) return;
+		if (!playheadEl || !rulerViewport) return;
 
-		const playheadPixels = timelineTimeToPixels({
+		const shouldAutoScroll =
+			this.config.getIsPlaying() && this.session.kind !== "scrubbing";
+		const tracksViewport = shouldAutoScroll
+			? this.config.getTracksScrollEl()
+			: null;
+
+		// --- reads ---
+		const centerPixel = timelineTimeToSnappedPixels({
 			time,
 			zoomLevel: this.config.zoomLevel,
 		});
-		const viewportWidth = rulerViewport.clientWidth;
-		const isOutOfView =
-			playheadPixels < rulerViewport.scrollLeft ||
-			playheadPixels > rulerViewport.scrollLeft + viewportWidth;
+		const scrollLeft = rulerViewport.scrollLeft;
 
-		if (isOutOfView) {
-			const desiredScroll = Math.max(
-				0,
-				Math.min(
-					rulerViewport.scrollWidth - viewportWidth,
-					playheadPixels - viewportWidth / 2,
-				),
-			);
+		let desiredScroll: number | null = null;
+		if (shouldAutoScroll && tracksViewport) {
+			const playheadPixels = timelineTimeToPixels({
+				time,
+				zoomLevel: this.config.zoomLevel,
+			});
+			const viewportWidth = rulerViewport.clientWidth;
+			const isOutOfView =
+				playheadPixels < scrollLeft ||
+				playheadPixels > scrollLeft + viewportWidth;
+
+			if (isOutOfView) {
+				desiredScroll = Math.max(
+					0,
+					Math.min(
+						rulerViewport.scrollWidth - viewportWidth,
+						playheadPixels - viewportWidth / 2,
+					),
+				);
+			}
+		}
+
+		// --- writes ---
+		playheadEl.style.left = `${getCenteredLineLeft({ centerPixel }) - scrollLeft}px`;
+		if (desiredScroll !== null && tracksViewport) {
 			rulerViewport.scrollLeft = tracksViewport.scrollLeft = desiredScroll;
 		}
 	}

@@ -39,6 +39,8 @@ interface InputProps
 	showClearIcon?: boolean;
 	onClear?: () => void;
 	containerClassName?: string;
+	/** Leading icon (e.g. a search glyph) rendered inside the field, left-aligned. */
+	icon?: React.ReactNode;
 }
 
 const Input = forwardRef<HTMLInputElement, InputProps>(
@@ -53,6 +55,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
 			onShowPasswordChange,
 			showClearIcon,
 			onClear,
+			icon,
 			value,
 			onFocus,
 			onBlur,
@@ -79,14 +82,22 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
 
 		return (
 			<div
-				className={cn(hasIcons ? "relative w-full" : "", containerClassName)}
+				className={cn(
+					hasIcons || icon ? "relative w-full" : "",
+					containerClassName,
+				)}
 			>
+				{icon && (
+					<span className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 [&_svg]:size-4">
+						{icon}
+					</span>
+				)}
 				<input
 					type={inputType}
 					className={cn(
 						inputVariants({
 							size,
-							className: cn(paddingRight, className),
+							className: cn(paddingRight, icon && "pl-9", className),
 							variant,
 						}),
 					)}

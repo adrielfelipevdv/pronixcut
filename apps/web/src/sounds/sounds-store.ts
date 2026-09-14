@@ -135,7 +135,7 @@ export const useSoundsStore = create<SoundsStore>((set, get) => ({
 			});
 		} catch (error) {
 			const errorMessage =
-				error instanceof Error ? error.message : "Failed to load saved sounds";
+				error instanceof Error ? error.message : "Falha ao carregar sons salvos";
 			set({
 				savedSoundsError: errorMessage,
 				isLoadingSavedSounds: false,
@@ -152,9 +152,9 @@ export const useSoundsStore = create<SoundsStore>((set, get) => ({
 			set({ savedSounds: savedSoundsData.sounds });
 		} catch (error) {
 			const errorMessage =
-				error instanceof Error ? error.message : "Failed to save sound";
+				error instanceof Error ? error.message : "Falha ao salvar som";
 			set({ savedSoundsError: errorMessage });
-			toast.error("Failed to save sound");
+			toast.error("Falha ao salvar som");
 			console.error("Failed to save sound:", error);
 		}
 	},
@@ -168,9 +168,9 @@ export const useSoundsStore = create<SoundsStore>((set, get) => ({
 			}));
 		} catch (error) {
 			const errorMessage =
-				error instanceof Error ? error.message : "Failed to remove sound";
+				error instanceof Error ? error.message : "Falha ao remover som";
 			set({ savedSoundsError: errorMessage });
-			toast.error("Failed to remove sound");
+			toast.error("Falha ao remover som");
 			console.error("Failed to remove sound:", error);
 		}
 	},
@@ -199,9 +199,9 @@ export const useSoundsStore = create<SoundsStore>((set, get) => ({
 			});
 		} catch (error) {
 			const errorMessage =
-				error instanceof Error ? error.message : "Failed to clear saved sounds";
+				error instanceof Error ? error.message : "Falha ao limpar sons salvos";
 			set({ savedSoundsError: errorMessage });
-			toast.error("Failed to clear saved sounds");
+			toast.error("Falha ao limpar sons salvos");
 			console.error("Failed to clear saved sounds:", error);
 		}
 	},
@@ -209,7 +209,7 @@ export const useSoundsStore = create<SoundsStore>((set, get) => ({
 	addSoundToTimeline: async ({ sound }) => {
 		const audioUrl = sound.previewUrl;
 		if (!audioUrl) {
-			toast.error("Sound file not available");
+			toast.error("Arquivo de som não disponível");
 			return false;
 		}
 
@@ -243,7 +243,7 @@ export const useSoundsStore = create<SoundsStore>((set, get) => ({
 			toast.error(
 				error instanceof Error
 					? error.message
-					: "Failed to add sound to timeline",
+					: "Falha ao adicionar som à linha do tempo",
 				{ id: `sound-${sound.id}` },
 			);
 			return false;

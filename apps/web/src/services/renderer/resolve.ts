@@ -5,7 +5,7 @@ import {
 	buildGaussianBlurPasses,
 	intensityToSigma,
 } from "@/effects/definitions/blur";
-import { effectsRegistry, resolveEffectPasses } from "@/effects";
+import { effectsRegistry, isCanvas2DEffect, resolveEffectPasses } from "@/effects";
 import type { Effect, EffectPass } from "@/effects/types";
 import { getSourceTimeAtClipTime } from "@/retime";
 import {
@@ -112,20 +112,49 @@ function resolveEffectPassGroups({
 	return (effects ?? [])
 		.filter((effect) => effect.enabled)
 		.map((effect) => {
+			const definition = effectsRegistry.get(effect.type);
+			if (isCanvas2DEffect({ definition })) {
+				// Applied directly on the source frame instead — see
+				// resolveCanvas2DEffects / frame-descriptor.ts.
+				return [];
+			}
 			const resolvedParams = resolveEffectParamsAtTime({
 				effectId: effect.id,
 				params: effect.params,
 				animations,
 				localTime,
 			});
-			const definition = effectsRegistry.get(effect.type);
 			return resolveEffectPasses({
 				definition,
 				effectParams: resolvedParams,
 				width,
 				height,
 			});
-		});
+		})
+		.filter((passes) => passes.length > 0);
+}
+
+function resolveCanvas2DEffects({
+	effects,
+	animations,
+	localTime,
+}: {
+	effects: Effect[] | undefined;
+	animations: VisualNodeParams["animations"];
+	localTime: number;
+}): Effect[] {
+	return (effects ?? [])
+		.filter((effect) => effect.enabled)
+		.filter((effect) => isCanvas2DEffect({ definition: effectsRegistry.get(effect.type) }))
+		.map((effect) => ({
+			...effect,
+			params: resolveEffectParamsAtTime({
+				effectId: effect.id,
+				params: effect.params,
+				animations,
+				localTime,
+			}),
+		}));
 }
 
 function resolveVisualState({
@@ -180,6 +209,11 @@ function resolveVisualState({
 			localTime,
 			width: effectWidth,
 			height: effectHeight,
+		}),
+		canvas2dEffects: resolveCanvas2DEffects({
+			effects: params.effects,
+			animations: params.animations,
+			localTime,
 		}),
 	};
 }

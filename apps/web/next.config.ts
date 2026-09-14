@@ -9,6 +9,11 @@ const nextConfig: NextConfig = {
 	reactStrictMode: true,
 	productionBrowserSourceMaps: true,
 	output: "standalone",
+	// Next's standalone build tracer doesn't always pick up styled-jsx's
+	// dynamic runtime require of its own package.json; force-include it.
+	outputFileTracingIncludes: {
+		"/*": ["./node_modules/styled-jsx/**/*"],
+	},
 	images: {
 		remotePatterns: [
 			{

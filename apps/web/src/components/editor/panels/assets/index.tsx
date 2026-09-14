@@ -5,11 +5,11 @@ import { type Tab, useAssetsPanelStore } from "@/components/editor/panels/assets
 import { TabBar } from "./tabbar";
 import { Captions } from "@/subtitles/components/assets-view";
 import { MediaView } from "./views/assets";
-import { SettingsView } from "./views/settings";
 import { SoundsView } from "@/sounds/components/assets-view";
 import { StickersView } from "@/stickers/components/assets-view";
 import { TextView } from "@/text/components/assets-view";
 import { EffectsView } from "@/effects/components/assets-view";
+import { PronixEditorShell } from "@/pronix-editor/components/shell";
 
 export function AssetsPanel() {
 	const { activeTab } = useAssetsPanelStore();
@@ -22,22 +22,22 @@ export function AssetsPanel() {
 		effects: <EffectsView />,
 		transitions: (
 			<div className="text-muted-foreground p-4">
-				Transitions view coming soon...
+				Visualização de transições em breve...
 			</div>
 		),
 		captions: <Captions />,
 		adjustment: (
 			<div className="text-muted-foreground p-4">
-				Adjustment view coming soon...
+				Visualização de ajustes em breve...
 			</div>
 		),
-		settings: <SettingsView />,
+		pronixEditor: <PronixEditorShell />,
 	};
 
 	return (
-		<div className="panel bg-background flex h-full rounded-sm border overflow-hidden">
+		<div className="panel bg-background border-border flex h-full overflow-hidden rounded-[10px] border">
 			<TabBar />
-			<Separator orientation="vertical" />
+			<Separator orientation="vertical" className="bg-border" />
 			<div className="flex-1 overflow-hidden">{viewMap[activeTab]}</div>
 		</div>
 	);

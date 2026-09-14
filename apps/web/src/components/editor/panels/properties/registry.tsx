@@ -23,11 +23,14 @@ import {
 	DashboardSpeed02Icon,
 } from "@hugeicons/core-free-icons";
 import { ElementParamsTab } from "./components/element-params-tab";
+import { FadeControls } from "./components/fade-controls";
+import { VOLUME_DB_MIN } from "@/timeline/audio-constants";
 import { ClipEffectsTab, StandaloneEffectTab } from "@/effects/components/effects-tab";
 import { MasksTab } from "@/masks/components/masks-tab";
 import { SpeedTab } from "@/speed/components/speed-tab";
 import { GraphicTab } from "@/graphics/components/graphic-tab";
 import { OcShapesIcon } from "@/components/icons";
+import { SaveTextPresetButton } from "@/text/components/save-text-preset-button";
 
 const TRANSFORM_PARAM_KEYS = [
 	"transform.positionX",
@@ -39,7 +42,7 @@ const TRANSFORM_PARAM_KEYS = [
 
 const BLENDING_PARAM_KEYS = ["opacity", "blendMode"] as const;
 const AUDIO_PARAM_KEYS = ["volume", "muted"] as const;
-const TEXT_PARAM_KEYS = [
+export const TEXT_PARAM_KEYS = [
 	"content",
 	"fontFamily",
 	"fontSize",
@@ -82,7 +85,7 @@ function buildTransformTab({
 }): PropertiesTabDef {
 	return {
 		id: "transform",
-		label: "Transform",
+		label: "Transformar",
 		icon: <HugeiconsIcon icon={ArrowExpandIcon} size={16} />,
 		content: ({ trackId }) => (
 			<ElementParamsTab
@@ -102,15 +105,28 @@ function buildBlendingTab({
 }): PropertiesTabDef {
 	return {
 		id: "blending",
-		label: "Blending",
+		label: "Mesclagem",
 		icon: <HugeiconsIcon icon={RainDropIcon} size={16} />,
 		content: ({ trackId }) => (
-			<ElementParamsTab
-				element={element}
-				trackId={trackId}
-				paramKeys={BLENDING_PARAM_KEYS}
-				sectionKey="blending"
-			/>
+			<>
+				<ElementParamsTab
+					element={element}
+					trackId={trackId}
+					paramKeys={BLENDING_PARAM_KEYS}
+					sectionKey="blending"
+				/>
+				<FadeControls
+					trackId={trackId}
+					elementId={element.id}
+					duration={element.duration}
+					propertyPath="opacity"
+					baseValue={
+						typeof element.params.opacity === "number" ? element.params.opacity : 1
+					}
+					silentValue={0}
+					label="Fade de vídeo"
+				/>
+			</>
 		),
 	};
 }
@@ -122,15 +138,28 @@ function buildAudioTab({
 }): PropertiesTabDef {
 	return {
 		id: "audio",
-		label: "Audio",
+		label: "Áudio",
 		icon: <HugeiconsIcon icon={MusicNote03Icon} size={16} />,
 		content: ({ trackId }) => (
-			<ElementParamsTab
-				element={element}
-				trackId={trackId}
-				paramKeys={AUDIO_PARAM_KEYS}
-				sectionKey="audio"
-			/>
+			<>
+				<ElementParamsTab
+					element={element}
+					trackId={trackId}
+					paramKeys={AUDIO_PARAM_KEYS}
+					sectionKey="audio"
+				/>
+				<FadeControls
+					trackId={trackId}
+					elementId={element.id}
+					duration={element.duration}
+					propertyPath="volume"
+					baseValue={
+						typeof element.params.volume === "number" ? element.params.volume : 0
+					}
+					silentValue={VOLUME_DB_MIN}
+					label="Fade de áudio"
+				/>
+			</>
 		),
 	};
 }
@@ -142,7 +171,7 @@ function buildSpeedTab({
 }): PropertiesTabDef {
 	return {
 		id: "speed",
-		label: "Speed",
+		label: "Velocidade",
 		icon: <HugeiconsIcon icon={DashboardSpeed02Icon} size={16} />,
 		content: ({ trackId }) => <SpeedTab element={element} trackId={trackId} />,
 	};
@@ -155,7 +184,7 @@ function buildMasksTab({
 }): PropertiesTabDef {
 	return {
 		id: "masks",
-		label: "Masks",
+		label: "Máscaras",
 		icon: <OcShapesIcon size={16} />,
 		content: ({ trackId }) => <MasksTab element={element} trackId={trackId} />,
 	};
@@ -168,7 +197,7 @@ function buildClipEffectsTab({
 }): PropertiesTabDef {
 	return {
 		id: "effects",
-		label: "Effects",
+		label: "Efeitos",
 		icon: <HugeiconsIcon icon={MagicWand05Icon} size={16} />,
 		content: ({ trackId }) => (
 			<ClipEffectsTab element={element} trackId={trackId} />
@@ -179,15 +208,20 @@ function buildClipEffectsTab({
 function buildTextTab({ element }: { element: TextElement }): PropertiesTabDef {
 	return {
 		id: "text",
-		label: "Text",
+		label: "Texto",
 		icon: <HugeiconsIcon icon={TextFontIcon} size={16} />,
 		content: ({ trackId }) => (
-			<ElementParamsTab
-				element={element}
-				trackId={trackId}
-				paramKeys={TEXT_PARAM_KEYS}
-				sectionKey="text"
-			/>
+			<div className="flex flex-col">
+				<ElementParamsTab
+					element={element}
+					trackId={trackId}
+					paramKeys={TEXT_PARAM_KEYS}
+					sectionKey="text"
+				/>
+				<div className="px-3 pt-1 pb-3">
+					<SaveTextPresetButton element={element} />
+				</div>
+			</div>
 		),
 	};
 }
@@ -199,7 +233,7 @@ function buildGraphicTab({
 }): PropertiesTabDef {
 	return {
 		id: "graphic",
-		label: "Graphic",
+		label: "Gráfico",
 		icon: <OcShapesIcon size={16} />,
 		content: ({ trackId }) => <GraphicTab element={element} trackId={trackId} />,
 	};
@@ -212,7 +246,7 @@ function buildStandaloneEffectTab({
 }): PropertiesTabDef {
 	return {
 		id: "effects",
-		label: "Effects",
+		label: "Efeitos",
 		icon: <HugeiconsIcon icon={MagicWand05Icon} size={16} />,
 		content: ({ trackId }) => (
 			<StandaloneEffectTab element={element} trackId={trackId} />

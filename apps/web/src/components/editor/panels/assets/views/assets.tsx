@@ -80,7 +80,7 @@ export function MediaView() {
 	const processFiles = async ({ files }: { files: File[] }) => {
 		if (!files || files.length === 0) return;
 		if (!activeProject) {
-			toast.error("No active project");
+			toast.error("Nenhum projeto ativo");
 			return;
 		}
 
@@ -192,7 +192,7 @@ export function MediaView() {
 			<input {...fileInputProps} />
 
 			<PanelView
-				title="Assets"
+				title="Mídia"
 				actions={
 					<MediaActions
 						mediaViewMode={mediaViewMode}

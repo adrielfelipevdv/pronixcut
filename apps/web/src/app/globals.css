@@ -15,11 +15,11 @@
   --popover: hsl(0, 0%, 100%);
   --popover-hover: hsl(0, 0%, 96%);
   --popover-foreground: hsl(0 0% 2%);
-  --primary: hsl(200, 90%, 52%);
-  --primary-foreground: hsl(0, 0%, 100%);
-  --secondary: hsl(204, 100%, 97%);
-  --secondary-border: hsl(204, 100%, 94%);
-  --secondary-foreground: hsl(200, 98%, 39%);
+  --primary: #FFC600;
+  --primary-foreground: hsl(0, 0%, 10%);
+  --secondary: hsl(45, 100%, 95%);
+  --secondary-border: hsl(45, 90%, 88%);
+  --secondary-foreground: hsl(38, 90%, 30%);
   --muted: hsl(0 0% 85.1%);
   --muted-foreground: hsl(0 0% 50%);
   --accent: hsl(0, 0%, 96%);
@@ -54,10 +54,10 @@
   --foreground: hsl(0 0% 13%);
   --card: hsl(0, 0%, 98%);
   --card-foreground: hsl(0 0% 13%);
-  --primary-foreground: hsl(0, 0%, 98%);
-  --secondary: hsl(204, 100%, 95%);
-  --secondary-border: hsl(204, 100%, 92%);
-  --secondary-foreground: hsl(200, 98%, 37%);
+  --primary-foreground: hsl(0, 0%, 10%);
+  --secondary: hsl(45, 100%, 93%);
+  --secondary-border: hsl(45, 90%, 86%);
+  --secondary-foreground: hsl(38, 90%, 28%);
   --muted: hsl(0 0% 83.1%);
   --muted-foreground: hsl(0 0% 48%);
   --accent: hsl(0, 0%, 93%);
@@ -70,49 +70,109 @@
 }
 
 .dark {
-  --background: hsl(0, 0%, 5%);
-  --foreground: hsl(0 0% 87%);
-  --card: hsl(0, 0%, 5%);
-  --card-foreground: hsl(0 0% 87%);
-  --popover: hsl(0, 0%, 5%);
-  --popover-hover: hsl(0, 0%, 13%);
-  --popover-foreground: hsl(0 0% 95%);
-  --secondary: hsl(204, 100%, 12%);
-  --secondary-border: hsl(204, 100%, 15%);
-  --secondary-foreground: hsl(200, 98%, 61%);
-  --muted: hsl(0 0% 20%);
-  --accent: hsl(0, 0%, 14%);
-  --accent-foreground: hsl(0 0% 95%);
-  --border: hsl(0 0% 16%);
-  --input: hsl(0 0% 5%);
-  --ring: hsl(0, 0%, 50%);
+  /* ── Pronix design system — base surfaces ──────────────────────────── */
+  --pronix-bg-app: #090a0b;
+  --pronix-bg-sidebar: #0d0e10;
+  --pronix-bg-panel: #111214;
+  --pronix-bg-panel-alt: #141517;
+  --pronix-bg-elevated: #18191c;
+  --pronix-bg-hover: #1c1d20;
+  --pronix-border: rgba(255, 255, 255, 0.08);
+  --pronix-border-active: rgba(255, 255, 255, 0.12);
+  --pronix-text-primary: #ffffff;
+  --pronix-text-secondary: #b6b6ba;
+  --pronix-text-tertiary: #777a80;
+  --pronix-yellow: #ffc600;
+  --pronix-success: #20d98b;
+  --pronix-danger: #ff3b4e;
+  --pronix-info: #2f6fed;
+
+  --background: var(--pronix-bg-app);
+  --foreground: var(--pronix-text-primary);
+  --card: var(--pronix-bg-panel);
+  --card-foreground: var(--pronix-text-primary);
+  --popover: var(--pronix-bg-elevated);
+  --popover-hover: var(--pronix-bg-hover);
+  --popover-foreground: var(--pronix-text-primary);
+  --primary: var(--pronix-yellow);
+  --primary-foreground: hsl(0, 0%, 10%);
+  --secondary: hsl(45, 55%, 14%);
+  --secondary-border: hsl(45, 70%, 22%);
+  --secondary-foreground: hsl(45, 100%, 65%);
+  --muted: var(--pronix-bg-elevated);
+  --muted-foreground: var(--pronix-text-secondary);
+  --accent: var(--pronix-bg-hover);
+  --accent-foreground: var(--pronix-text-primary);
+  --destructive: var(--pronix-danger);
+  --destructive-foreground: hsl(0, 0%, 100%);
+  --constructive: var(--pronix-success);
+  --constructive-foreground: hsl(0, 0%, 10%);
+  --border: var(--pronix-border);
+  --input: var(--pronix-bg-elevated);
+  --ring: var(--pronix-yellow);
   --caution: hsl(38, 92%, 60%);
   --caution-foreground: hsl(0, 0%, 10%);
-  --sidebar-background: hsl(0 0% 8%);
-  --sidebar-foreground: hsl(0 0% 95%);
-  --sidebar-primary: hsl(0 0% 95%);
-  --sidebar-primary-foreground: hsl(0 0% 15%);
-  --sidebar-accent: hsl(0 0% 20%);
-  --sidebar-accent-foreground: hsl(0 0% 95%);
-  --sidebar-border: hsl(0 0% 20%);
-  --sidebar-ring: hsl(0 0% 83.1%);
-  --sidebar: hsl(0 0% 6%);
+  --sidebar-background: var(--pronix-bg-sidebar);
+  --sidebar-foreground: var(--pronix-text-secondary);
+  --sidebar-primary: var(--pronix-yellow);
+  --sidebar-primary-foreground: hsl(0 0% 10%);
+  --sidebar-accent: var(--pronix-bg-hover);
+  --sidebar-accent-foreground: var(--pronix-text-primary);
+  --sidebar-border: var(--pronix-border);
+  --sidebar-ring: var(--pronix-yellow);
+  --sidebar: var(--pronix-bg-sidebar);
 }
 
 .dark .panel {
-  --background: hsl(0 0% 10%);
-  --foreground: hsl(0 0% 85%);
-  --card: hsl(0, 0%, 10%);
-  --card-foreground: hsl(0 0% 85%);
-  --secondary: hsl(204, 67%, 9%);
-  --secondary-border: hsl(204, 100%, 14%);
-  --secondary-foreground: hsl(200, 98%, 63%);
-  --muted: hsl(0 0% 22%);
-  --accent: hsl(0, 0%, 15%);
-  --accent-foreground: hsl(0 0% 93%);
-  --border: hsl(0 0% 18%);
-  --input: hsl(0 0% 22%);
-  --ring: hsl(0, 0%, 52%);
+  --background: var(--pronix-bg-panel);
+  --foreground: var(--pronix-text-primary);
+  --card: var(--pronix-bg-panel-alt);
+  --card-foreground: var(--pronix-text-primary);
+  --secondary: hsl(45, 50%, 12%);
+  --secondary-border: hsl(45, 70%, 20%);
+  --secondary-foreground: hsl(45, 100%, 66%);
+  --muted: var(--pronix-bg-elevated);
+  --muted-foreground: var(--pronix-text-secondary);
+  --accent: var(--pronix-bg-hover);
+  --accent-foreground: var(--pronix-text-primary);
+  --border: var(--pronix-border);
+  --input: var(--pronix-bg-elevated);
+  --ring: var(--pronix-yellow);
+}
+
+/* ── Premium dark identity (Marvendas-inspired: subtle depth + restrained
+   accent glow, never a "neon carnival") ──────────────────────────────── */
+:root:not(.light) body {
+  /* One quiet radial highlight, upper-right, well under 10% opacity — reads
+     as ambient light, not decoration. */
+  background-image: radial-gradient(
+    circle at 82% 0%,
+    rgba(255, 198, 0, 0.035),
+    transparent 32%
+  );
+  background-attachment: fixed;
+}
+
+.dark .panel {
+  box-shadow:
+    0 18px 40px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 198, 0, 0.25);
+}
+
+/* Discrete luminous border for the one or two things that are truly
+   "active" at a time (selected tab, selected clip) — not a general hover
+   effect, so it stays meaningful. */
+@utility active-glow {
+  box-shadow:
+    0 0 0 1px rgba(255, 198, 0, 0.28),
+    0 0 14px rgba(255, 198, 0, 0.16);
 }
 
 @layer base {
@@ -217,6 +277,25 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 
+  /* Pronix design system — direct semantic tokens for editor-chrome
+     components (sidebar, topbar, timeline, inspector). Existing shadcn
+     tokens above already inherit the same palette via the CSS variable
+     cascade in .dark / .dark .panel; these give new/rewritten components a
+     literal, self-documenting name instead of repeating hex values. */
+  --color-app: var(--pronix-bg-app, var(--background));
+  --color-panel-alt: var(--pronix-bg-panel-alt, var(--card));
+  --color-elevated: var(--pronix-bg-elevated, var(--muted));
+  --color-surface-hover: var(--pronix-bg-hover, var(--accent));
+  --color-border-active: var(--pronix-border-active, var(--border));
+  /* Third text tier below foreground/muted-foreground (which already carry
+     the primary/secondary values) — for timestamps, placeholders, disabled
+     labels. */
+  --color-subtle: var(--pronix-text-tertiary, var(--muted-foreground));
+  --color-pronix-yellow: var(--pronix-yellow, var(--primary));
+  --color-success: var(--pronix-success, var(--constructive));
+  --color-danger: var(--pronix-danger, var(--destructive));
+  --color-info: var(--pronix-info, #2f6fed);
+
   /* Animations */
   --animate-accordion-down: accordion-down 0.2s ease-out;
   --animate-accordion-up: accordion-up 0.2s ease-out;
@@ -266,8 +345,8 @@
 
 @utility scrollbar-thin {
   &::-webkit-scrollbar {
-    width: 7px;
-    height: 7px;
+    width: 6px;
+    height: 6px;
   }
   &::-webkit-scrollbar-track {
     background: transparent;

@@ -71,7 +71,7 @@ export function ScenesView({ children }: { children: React.ReactNode }) {
 
 			const { canDelete, reason } = canDeleteScene({ scene });
 			if (!canDelete) {
-				toast.error(reason || "Failed to delete scene");
+				toast.error(reason || "Falha ao excluir cena");
 				continue;
 			}
 

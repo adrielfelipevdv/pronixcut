@@ -9,11 +9,10 @@ import {
 	HeadphonesIcon,
 	MagicWand05Icon,
 	TextIcon,
-	Settings01Icon,
 	SlidersHorizontalIcon,
-	ColorsIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
+import { PronixEditorIcon } from "@/components/icons";
 
 export const TAB_KEYS = [
 	"media",
@@ -24,7 +23,7 @@ export const TAB_KEYS = [
 	"transitions",
 	"captions",
 	"adjustment",
-	"settings",
+	"pronixEditor",
 ] as const;
 
 export type Tab = (typeof TAB_KEYS)[number];
@@ -38,39 +37,39 @@ const createHugeiconsIcon =
 export const tabs = {
 	media: {
 		icon: createHugeiconsIcon({ icon: Folder03Icon }),
-		label: "Media",
+		label: "Mídia",
 	},
 	sounds: {
 		icon: createHugeiconsIcon({ icon: HeadphonesIcon }),
-		label: "Sounds",
+		label: "Áudio",
 	},
 	text: {
 		icon: createHugeiconsIcon({ icon: TextIcon }),
-		label: "Text",
+		label: "Texto",
 	},
 	stickers: {
 		icon: createHugeiconsIcon({ icon: Happy01Icon }),
-		label: "Stickers",
+		label: "Adesivos",
 	},
 	effects: {
 		icon: createHugeiconsIcon({ icon: MagicWand05Icon }),
-		label: "Effects",
+		label: "Efeitos",
 	},
 	transitions: {
 		icon: createHugeiconsIcon({ icon: ArrowRightDoubleIcon }),
-		label: "Transitions",
+		label: "Transições",
 	},
 	captions: {
 		icon: createHugeiconsIcon({ icon: ClosedCaptionIcon }),
-		label: "Captions",
+		label: "Legendas",
 	},
 	adjustment: {
 		icon: createHugeiconsIcon({ icon: SlidersHorizontalIcon }),
-		label: "Adjustment",
+		label: "Ajustes",
 	},
-	settings: {
-		icon: createHugeiconsIcon({ icon: Settings01Icon }),
-		label: "Settings",
+	pronixEditor: {
+		icon: PronixEditorIcon,
+		label: "PronixEditor",
 	},
 } satisfies Record<
 	Tab,
@@ -87,6 +86,10 @@ interface AssetsPanelStore {
 	highlightMediaId: string | null;
 	requestRevealMedia: (mediaId: string) => void;
 	clearHighlight: () => void;
+
+	/* Sidebar */
+	sidebarCollapsed: boolean;
+	toggleSidebarCollapsed: () => void;
 
 	/* Media */
 	mediaViewMode: MediaViewMode;
@@ -105,6 +108,9 @@ export const useAssetsPanelStore = create<AssetsPanelStore>()(
 			requestRevealMedia: (mediaId) =>
 				set({ activeTab: "media", highlightMediaId: mediaId }),
 			clearHighlight: () => set({ highlightMediaId: null }),
+			sidebarCollapsed: false,
+			toggleSidebarCollapsed: () =>
+				set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
 			mediaViewMode: "grid",
 			setMediaViewMode: (mode) => set({ mediaViewMode: mode }),
 			mediaSortBy: "name",
@@ -118,6 +124,7 @@ export const useAssetsPanelStore = create<AssetsPanelStore>()(
 				mediaViewMode: state.mediaViewMode,
 				mediaSortBy: state.mediaSortBy,
 				mediaSortOrder: state.mediaSortOrder,
+				sidebarCollapsed: state.sidebarCollapsed,
 			}),
 		},
 	),

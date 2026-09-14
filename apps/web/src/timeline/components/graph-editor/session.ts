@@ -252,14 +252,14 @@ function resolvePropertySelection({
 	if (propertyKeyframes.keyframes.length > 2) {
 		return {
 			reason: "multiple-keyframes-selected",
-			message: "Select at most two adjacent keyframes per property.",
+			message: "Selecione no máximo dois keyframes adjacentes por propriedade.",
 		};
 	}
 
 	if (!element.animations) {
 		return {
 			reason: "selected-element-has-no-animations",
-			message: "The selected keyframe has no editable graph.",
+			message: "O keyframe selecionado não possui um gráfico editável.",
 		};
 	}
 
@@ -270,7 +270,7 @@ function resolvePropertySelection({
 	if (!scalarResult || scalarResult.channels.length === 0) {
 		return {
 			reason: "selected-keyframe-has-no-scalar-channel",
-			message: "The selected keyframe has no editable graph channel.",
+			message: "O keyframe selecionado não possui um canal de gráfico editável.",
 		};
 	}
 
@@ -324,7 +324,7 @@ function resolvePropertySelection({
 	if (contexts.length === 0) {
 		return {
 			reason: "selected-keyframe-missing-on-channel",
-			message: "The selected keyframe is not editable as a graph segment.",
+			message: "O keyframe selecionado não é editável como segmento de gráfico.",
 		};
 	}
 
@@ -389,14 +389,14 @@ function resolveSegmentForOption({
 	if (!option) {
 		return {
 			reason: "selected-properties-have-no-shared-component",
-			message: "Selected properties do not share a graph-editable channel.",
+			message: "As propriedades selecionadas não compartilham um canal editável em gráfico.",
 		};
 	}
 
 	if (!option.context.nextKey) {
 		return {
 			reason: "selected-keyframe-has-no-next-segment",
-			message: "Select a keyframe that has an outgoing segment.",
+			message: "Selecione um keyframe que tenha um segmento de saída.",
 		};
 	}
 
@@ -406,14 +406,14 @@ function resolveSegmentForOption({
 	) {
 		return {
 			reason: "selected-keyframes-are-not-adjacent",
-			message: "Selected keyframes must be adjacent on each property.",
+			message: "Os keyframes selecionados devem ser adjacentes em cada propriedade.",
 		};
 	}
 
 	if (option.context.keyframe.segmentToNext === "step") {
 		return {
 			reason: "selected-segment-is-hold",
-			message: "Hold segments have a fixed value - easing has no effect here.",
+			message: "Segmentos de espera têm um valor fixo - a suavização não tem efeito aqui.",
 		};
 	}
 
@@ -458,7 +458,7 @@ export function resolveGraphEditorSelectionState({
 	if (selectedKeyframes.length === 0) {
 		return createUnavailableState({
 			reason: "no-keyframe-selected",
-			message: "Select a keyframe to edit its curve.",
+			message: "Selecione um keyframe para editar sua curva.",
 		});
 	}
 
@@ -469,7 +469,7 @@ export function resolveGraphEditorSelectionState({
 	if (!primaryKeyframe) {
 		return createUnavailableState({
 			reason: "no-keyframe-selected",
-			message: "Select a keyframe to edit its curve.",
+			message: "Selecione um keyframe para editar sua curva.",
 		});
 	}
 
@@ -480,7 +480,7 @@ export function resolveGraphEditorSelectionState({
 	if (!selectedElement) {
 		return createUnavailableState({
 			reason: "selected-element-missing",
-			message: "The selected keyframe could not be resolved.",
+			message: "Não foi possível resolver o keyframe selecionado.",
 		});
 	}
 
@@ -492,7 +492,7 @@ export function resolveGraphEditorSelectionState({
 	if (spansMultipleElements) {
 		return createUnavailableState({
 			reason: "selected-keyframes-span-multiple-elements",
-			message: "Selected keyframes must be on the same element.",
+			message: "Os keyframes selecionados devem estar no mesmo elemento.",
 		});
 	}
 
@@ -534,7 +534,7 @@ export function resolveGraphEditorSelectionState({
 	if (componentOptions.length === 0) {
 		return createUnavailableState({
 			reason: "selected-properties-have-no-shared-component",
-			message: "Selected properties do not share a graph-editable channel.",
+			message: "As propriedades selecionadas não compartilham um canal editável em gráfico.",
 		});
 	}
 
@@ -587,7 +587,7 @@ export function resolveGraphEditorSelectionState({
 	if (!primarySegment) {
 		return createUnavailableState({
 			reason: "selected-keyframe-missing-on-channel",
-			message: "The selected keyframe is not editable as a graph segment.",
+			message: "O keyframe selecionado não é editável como segmento de gráfico.",
 			componentOptions,
 			activeComponentKey,
 		});
@@ -597,8 +597,8 @@ export function resolveGraphEditorSelectionState({
 		status: "ready",
 		message:
 			segments.length === 1
-				? "Edit graph"
-				: `Edit graph for ${segments.length} properties`,
+				? "Editar gráfico"
+				: `Editar gráfico de ${segments.length} propriedades`,
 		componentOptions,
 		activeComponentKey,
 		trackId: selectedElement.trackId,

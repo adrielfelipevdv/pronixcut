@@ -19,6 +19,11 @@ export function resolveEffectPasses({
 	width: number;
 	height: number;
 }): EffectPass[] {
+	if (definition.renderer.kind !== "gpu") {
+		// canvas2d effects don't produce GPU shader passes — they're applied
+		// directly on the source frame (see frame-descriptor.ts).
+		return [];
+	}
 	if (definition.renderer.buildPasses) {
 		return definition.renderer.buildPasses({ effectParams, width, height });
 	}
@@ -26,6 +31,14 @@ export function resolveEffectPasses({
 		shader: pass.shader,
 		uniforms: pass.uniforms({ effectParams, width, height }),
 	}));
+}
+
+export function isCanvas2DEffect({
+	definition,
+}: {
+	definition: EffectDefinition;
+}): boolean {
+	return definition.renderer.kind === "canvas2d";
 }
 
 export const EFFECT_TARGET_ELEMENT_TYPES = VISUAL_ELEMENT_TYPES;

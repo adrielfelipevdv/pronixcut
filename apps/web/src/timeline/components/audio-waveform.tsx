@@ -214,7 +214,12 @@ export function AudioWaveform({
 		ctx.setTransform(1, 0, 0, 1, 0, 0);
 		ctx.clearRect(0, 0, canvasW, canvasH);
 
-		const clipBottom = canvasH;
+		// Mirrored around the vertical center of the track, like a
+		// professional editor's waveform — not bars growing up from the
+		// bottom. Each bar reserves a minimum 1px sliver even at zero
+		// amplitude so silence still reads as "a flat line", not a gap.
+		const centerDeviceY = canvasH / 2;
+		const minHalfHeightDevice = Math.max(0.5, backingScaleY * 0.5);
 
 		for (let i = 0; i < barCount; i++) {
 			const barCenterPx = clipLeft + i * BAR_STEP + BAR_WIDTH * 0.5;
@@ -234,9 +239,6 @@ export function AudioWaveform({
 			const outputAmplitude = amplitude * Math.max(0, gain);
 			const fraction = getBarFractionFromOutputAmplitude({ outputAmplitude });
 			const barH = fraction > 0 ? Math.max(1, fraction * height) : 0;
-			if (barH <= 0) {
-				continue;
-			}
 
 			const barLeft = i * BAR_STEP;
 			const barRight = barLeft + BAR_WIDTH;
@@ -245,8 +247,13 @@ export function AudioWaveform({
 				deviceLeft + 1,
 				Math.round(barRight * backingScaleX),
 			);
-			const deviceTop = Math.round((height - barH) * backingScaleY);
-			const deviceHeight = Math.max(1, clipBottom - deviceTop);
+
+			const halfHeightDevice = Math.max(
+				minHalfHeightDevice,
+				(barH * backingScaleY) / 2,
+			);
+			const deviceTop = Math.round(centerDeviceY - halfHeightDevice);
+			const deviceHeight = Math.max(1, Math.round(halfHeightDevice * 2));
 
 			ctx.fillStyle = colorValue;
 			ctx.fillRect(
@@ -257,11 +264,12 @@ export function AudioWaveform({
 			);
 
 			if (outputAmplitude > 1) {
-				const burnHeight = Math.max(1, Math.round(BAR_WIDTH * backingScaleY));
 				ctx.fillStyle = burnColorValue;
+				const burnHeight = Math.max(1, Math.round(BAR_WIDTH * backingScaleY));
+				ctx.fillRect(deviceLeft, deviceTop, deviceRight - deviceLeft, burnHeight);
 				ctx.fillRect(
 					deviceLeft,
-					deviceTop,
+					deviceTop + deviceHeight - burnHeight,
 					deviceRight - deviceLeft,
 					burnHeight,
 				);

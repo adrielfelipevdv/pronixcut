@@ -71,6 +71,12 @@ export class CanvasRenderer {
 			name: "renderFrame",
 			fn: () => wasmCompositor.render(frame),
 		});
+		// This is the actual per-frame playback path (PreviewCanvas's RAF loop
+		// calls render() directly, not renderToCanvas() — that one is only used
+		// for one-shot snapshots/thumbnails). onRenderPerfFrameComplete() used to
+		// live solely in renderToCanvas(), so window.__renderPerf's rolling
+		// summary never accumulated a single sample during real playback.
+		onRenderPerfFrameComplete();
 	}
 
 	async renderToCanvas({
@@ -100,6 +106,5 @@ export class CanvasRenderer {
 					targetCanvas.height,
 				),
 		});
-		onRenderPerfFrameComplete();
 	}
 }

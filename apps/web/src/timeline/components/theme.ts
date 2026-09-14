@@ -1,6 +1,11 @@
 import type { TrackType } from "@/timeline";
 
-export const TIMELINE_AUDIO_WAVEFORM_COLOR = "rgba(255, 255, 255, 0.7)";
+// Pronix timeline color hierarchy: yellow stays reserved for
+// action/selection/brand (see the selection ring in this file's consumer);
+// blue marks text/caption clips, green marks audio, so a glance at the
+// timeline tells you what kind of track you're looking at without reading
+// labels.
+export const TIMELINE_AUDIO_WAVEFORM_COLOR = "#20D98B";
 
 export const TIMELINE_TRACK_THEME: Record<
 	TrackType,
@@ -10,9 +15,9 @@ export const TIMELINE_TRACK_THEME: Record<
 	}
 > = {
 	video: { elementClassName: "transparent" },
-	text: { elementClassName: "bg-[#5DBAA0]" },
+	text: { elementClassName: "bg-[#3B65D6]" },
 	audio: {
-		elementClassName: "bg-[#8F5DBA]",
+		elementClassName: "bg-[#1B7A54]",
 		waveformColor: TIMELINE_AUDIO_WAVEFORM_COLOR,
 	},
 	graphic: { elementClassName: "bg-[#BA5D7A]" },

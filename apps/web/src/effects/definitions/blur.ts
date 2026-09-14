@@ -81,6 +81,7 @@ export const blurEffectDefinition: EffectDefinition = {
 		},
 	],
 	renderer: {
+		kind: "gpu",
 		passes: [
 			{
 				shader: GAUSSIAN_BLUR_SHADER,

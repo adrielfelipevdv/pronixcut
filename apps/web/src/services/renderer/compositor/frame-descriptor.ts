@@ -1,6 +1,8 @@
 import { drawCssBackground } from "@/gradients";
 import { getMaskDefinition } from "@/masks";
 import { incrementCounter } from "@/diagnostics/render-perf";
+import { effectsRegistry, isCanvas2DEffect } from "@/effects";
+import type { Canvas2DEffectRendererConfig, Effect } from "@/effects/types";
 import type { AnyBaseNode } from "../nodes/base-node";
 import type { CanvasRenderer } from "../canvas-renderer";
 import { createCanvasSurface } from "../canvas-utils";
@@ -240,13 +242,31 @@ async function collectVisualSourceNode({
 			: (node.resolved as ResolvedVisualSourceNodeState).sourceHeight;
 
 	const textureId = `${path}:source`;
-	textures.set(textureId, {
-		kind: "external",
-		id: textureId,
-		source,
-		width: sourceWidth,
-		height: sourceHeight,
-	});
+	const canvas2dEffects =
+		node instanceof GraphicNode ? [] : (node.resolved as ResolvedVisualSourceNodeState).canvas2dEffects;
+
+	if (canvas2dEffects.length > 0) {
+		textures.set(textureId, {
+			kind: "rendered",
+			id: textureId,
+			// Identity of the decoded source frame + the resolved (possibly
+			// animated) effect params is enough to know when to redraw — a
+			// frozen frame with unchanged params is skipped, same as any other
+			// rendered texture, so this doesn't run on every playback tick.
+			contentHash: `graded:${identityKey(source)}:${JSON.stringify(canvas2dEffects)}:${sourceWidth}x${sourceHeight}`,
+			width: sourceWidth,
+			height: sourceHeight,
+			draw: (ctx) => drawWithCanvas2DEffects({ ctx, source, width: sourceWidth, height: sourceHeight, effects: canvas2dEffects }),
+		});
+	} else {
+		textures.set(textureId, {
+			kind: "external",
+			id: textureId,
+			source,
+			width: sourceWidth,
+			height: sourceHeight,
+		});
+	}
 
 	const transform = computeVisualTransform({
 		renderer,
@@ -531,6 +551,43 @@ function buildMaskArtifacts({
 		},
 		strokeLayer,
 	};
+}
+
+function drawWithCanvas2DEffects({
+	ctx,
+	source,
+	width,
+	height,
+	effects,
+}: {
+	ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
+	source: CanvasImageSource;
+	width: number;
+	height: number;
+	effects: Effect[];
+}): void {
+	// One combined native filter (single filtered draw) followed by each
+	// effect's overlay compositing, in effect-stack order.
+	const filterParts: string[] = [];
+	for (const effect of effects) {
+		const definition = effectsRegistry.get(effect.type);
+		if (!isCanvas2DEffect({ definition })) continue;
+		const renderer = definition.renderer as Canvas2DEffectRendererConfig;
+		const part = renderer.filter?.({ effectParams: effect.params });
+		if (part) filterParts.push(part);
+	}
+
+	ctx.save();
+	ctx.filter = filterParts.length > 0 ? filterParts.join(" ") : "none";
+	ctx.drawImage(source, 0, 0, width, height);
+	ctx.restore();
+
+	for (const effect of effects) {
+		const definition = effectsRegistry.get(effect.type);
+		if (!isCanvas2DEffect({ definition })) continue;
+		const renderer = definition.renderer as Canvas2DEffectRendererConfig;
+		renderer.overlay?.({ ctx, width, height, effectParams: effect.params });
+	}
 }
 
 function drawTransformedCanvas({

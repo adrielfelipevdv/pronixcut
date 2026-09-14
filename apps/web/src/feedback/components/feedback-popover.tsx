@@ -69,7 +69,7 @@ function useFeedback() {
 
 			if (!res.ok) {
 				const data = await res.json().catch(() => null);
-				throw new Error(data?.error ?? "Failed to submit");
+				throw new Error(data?.error ?? "Falha ao enviar");
 			}
 
 			const { entry } = await res.json();
@@ -77,10 +77,10 @@ function useFeedback() {
 			setEntries(next);
 			writeHistory({ entries: next });
 			onSuccess();
-			toast.success("Feedback sent");
+			toast.success("Feedback enviado");
 		} catch (error) {
 			toast.error(
-				error instanceof Error ? error.message : "Failed to send feedback",
+				error instanceof Error ? error.message : "Falha ao enviar feedback",
 			);
 		} finally {
 			setIsSubmitting(false);
@@ -97,7 +97,7 @@ export function FeedbackPopover() {
 		<Popover open={open} onOpenChange={setOpen}>
 			<PopoverTrigger asChild>
 				<Button variant="outline" className="h-8">
-					Send feedback
+					Enviar feedback
 				</Button>
 			</PopoverTrigger>
 			<PopoverContent align="end" className="w-80 p-0">
@@ -148,7 +148,7 @@ function FeedbackPopoverContent({ onClose }: { onClose: () => void }) {
 						onClick={() => setView("compose")}
 						className="text-xs text-muted-foreground/60 hover:text-muted-foreground transition-colors"
 					>
-						← Back
+						← Voltar
 					</button>
 				</div>
 			</div>
@@ -166,7 +166,7 @@ function FeedbackPopoverContent({ onClose }: { onClose: () => void }) {
 							<FormItem>
 								<FormControl>
 									<Textarea
-										placeholder="Thoughts, bugs, ideas..."
+										placeholder="Comentários, bugs, ideias..."
 										className="min-h-[7rem] text-sm p-3 bg-background shadow-none border-none! resize-none"
 										{...field}
 									/>
@@ -195,7 +195,7 @@ function FeedbackPopoverContent({ onClose }: { onClose: () => void }) {
 									size="sm"
 									onClick={onClose}
 								>
-									Cancel
+									Cancelar
 								</Button>
 							)}
 							<Button
@@ -203,7 +203,7 @@ function FeedbackPopoverContent({ onClose }: { onClose: () => void }) {
 								size="sm"
 								disabled={isSubmitting || !form.watch("message").trim()}
 							>
-								{isSubmitting ? <Spinner /> : "Send"}
+								{isSubmitting ? <Spinner /> : "Enviar"}
 							</Button>
 						</div>
 					</div>
@@ -216,13 +216,13 @@ function FeedbackPopoverContent({ onClose }: { onClose: () => void }) {
 function relativeDate(iso: string): string {
 	const diff = Date.now() - new Date(iso).getTime();
 	const mins = Math.floor(diff / 60_000);
-	if (mins < 1) return "just now";
-	if (mins < 60) return `${mins}m ago`;
+	if (mins < 1) return "agora mesmo";
+	if (mins < 60) return `há ${mins}min`;
 	const hrs = Math.floor(mins / 60);
-	if (hrs < 24) return `${hrs}h ago`;
+	if (hrs < 24) return `há ${hrs}h`;
 	const days = Math.floor(hrs / 24);
-	if (days < 7) return `${days}d ago`;
-	return new Date(iso).toLocaleDateString(undefined, {
+	if (days < 7) return `há ${days}d`;
+	return new Date(iso).toLocaleDateString("pt-BR", {
 		month: "short",
 		day: "numeric",
 	});

@@ -28,6 +28,7 @@ import { useStickersStore } from "@/stickers/stickers-store";
 import { cn } from "@/utils/ui";
 import {
 	HappyIcon,
+	Search01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 
@@ -55,7 +56,8 @@ export function StickersView() {
 				<Input
 					size="sm"
 					variant="default"
-					placeholder="Search..."
+					icon={<HugeiconsIcon icon={Search01Icon} />}
+					placeholder="Buscar..."
 					value={searchQuery}
 					onChange={(e) => {
 						setSearchQuery({ query: e.target.value });
@@ -79,7 +81,7 @@ export function StickersView() {
 				variant="underline"
 				className="mt-2 flex min-h-0 flex-1 flex-col"
 			>
-				<TabsList aria-label="Sticker categories">
+				<TabsList aria-label="Categorias de adesivos">
 					{Object.entries(STICKER_CATEGORIES).map(([key, label]) => (
 						<TabsTrigger key={key} value={key}>
 							{label}
@@ -141,7 +143,7 @@ function EmptyView({ message }: { message: string }) {
 				className="text-muted-foreground size-10"
 			/>
 			<div className="flex flex-col gap-2 text-center">
-				<p className="text-lg font-medium">No stickers found</p>
+				<p className="text-lg font-medium">Nenhum adesivo encontrado</p>
 				<p className="text-muted-foreground text-sm text-balance">{message}</p>
 			</div>
 		</div>
@@ -150,7 +152,7 @@ function EmptyView({ message }: { message: string }) {
 
 function RegionBanner({ region }: { region: string }) {
 	return (
-		<div className="flex h-7 items-center gap-1.5 rounded-lg border border-sky-100 bg-sky-50 px-2">
+		<div className="border-secondary-border bg-secondary flex h-7 items-center gap-1.5 rounded-lg border px-2">
 			<svg
 				width="12"
 				height="12"
@@ -160,13 +162,15 @@ function RegionBanner({ region }: { region: string }) {
 				strokeWidth="2"
 				strokeLinecap="round"
 				strokeLinejoin="round"
-				className="shrink-0 text-sky-600"
+				className="text-secondary-foreground shrink-0"
 				aria-hidden="true"
 			>
 				<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
 				<circle cx="12" cy="10" r="3" />
 			</svg>
-			<span className="text-xs font-semibold text-sky-600">{region}</span>
+			<span className="text-secondary-foreground text-xs font-semibold">
+				{region}
+			</span>
 		</div>
 	);
 }
@@ -205,7 +209,7 @@ function StickersContentView() {
 					{isRegionSearch && <RegionBanner region={regionLabel} />}
 					<div className="flex items-center justify-between">
 						<span className="text-muted-foreground text-sm">
-							{searchResults.total} results
+							{searchResults.total} resultados
 						</span>
 					</div>
 					<StickerGrid items={searchResults.items} />
@@ -215,7 +219,11 @@ function StickersContentView() {
 
 		// "all" tab search — sections are in browseContent, fall through to section rendering below
 		if (selectedCategory !== "all" && searchQuery) {
-			return <EmptyView message={`No stickers found for "${searchQuery}"`} />;
+			return (
+				<EmptyView
+					message={`Nenhum adesivo encontrado para "${searchQuery}"`}
+				/>
+			);
 		}
 	}
 
@@ -233,10 +241,10 @@ function StickersContentView() {
 			<EmptyView
 				message={
 					viewMode === "search"
-						? `No stickers found for "${searchQuery}"`
+						? `Nenhum adesivo encontrado para "${searchQuery}"`
 						: selectedCategory === "all"
-							? "No stickers available yet."
-							: `No stickers available in ${categoryLabel.toLowerCase()} yet.`
+							? "Ainda não há adesivos disponíveis."
+							: `Ainda não há adesivos disponíveis em ${categoryLabel.toLowerCase()}.`
 				}
 			/>
 		);
@@ -288,7 +296,7 @@ function StickerSection({
 								size="sm"
 								className="h-auto gap-1 p-0 text-xs text-muted-foreground"
 							>
-								Clear
+								Limpar
 							</Button>
 						)}
 
@@ -301,7 +309,7 @@ function StickerSection({
 									onSeeAll(section.action?.category as StickerCategory);
 								}}
 							>
-								See all
+								Ver tudo
 							</Button>
 						)}
 					</div>
@@ -380,7 +388,7 @@ function StickerItem({
 			addToRecentStickers({ stickerId: item.id });
 		} catch (error) {
 			console.error("Failed to add sticker:", error);
-			toast.error("Failed to add sticker to timeline");
+			toast.error("Falha ao adicionar figurinha à linha do tempo");
 		} finally {
 			setIsAdding(false);
 		}

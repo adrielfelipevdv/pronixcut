@@ -73,8 +73,53 @@ export class RendererManager {
 			console.error("Copy snapshot failed:", error);
 			return {
 				success: false,
-				error: error instanceof Error ? error.message : "Unknown error",
+				error: error instanceof Error ? error.message : "Erro desconhecido",
 			};
+		}
+	}
+
+	/**
+	 * Renders the CURRENT scene at the current playhead time into a plain
+	 * canvas, on demand (same one-shot render already used by
+	 * saveSnapshot/copySnapshot — not run continuously, safe to call from UI
+	 * that just needs "a real frame of what's being edited right now", e.g.
+	 * effect preset thumbnails).
+	 */
+	async captureCurrentFrameCanvas(): Promise<HTMLCanvasElement | null> {
+		try {
+			const renderTree = this.getRenderTree();
+			const activeProject = this.editor.project.getActive();
+			if (!renderTree || !activeProject) return null;
+
+			const duration = this.editor.timeline.getTotalDuration();
+			if (duration === 0) return null;
+
+			const { canvasSize, fps } = activeProject.settings;
+			const renderTime = Math.min(
+				this.editor.playback.getCurrentTime(),
+				this.editor.timeline.getLastFrameTime(),
+			);
+
+			const renderer = new CanvasRenderer({
+				width: canvasSize.width,
+				height: canvasSize.height,
+				fps,
+			});
+
+			const tempCanvas = document.createElement("canvas");
+			tempCanvas.width = canvasSize.width;
+			tempCanvas.height = canvasSize.height;
+
+			await renderer.renderToCanvas({
+				node: renderTree,
+				time: renderTime,
+				targetCanvas: tempCanvas,
+			});
+
+			return tempCanvas;
+		} catch (error) {
+			console.error("Failed to capture current frame:", error);
+			return null;
 		}
 	}
 
@@ -84,12 +129,12 @@ export class RendererManager {
 			const activeProject = this.editor.project.getActive();
 
 			if (!renderTree || !activeProject) {
-				return { success: false, error: "No project or scene to capture" };
+				return { success: false, error: "Nenhum projeto ou cena para capturar" };
 			}
 
 			const duration = this.editor.timeline.getTotalDuration();
 			if (duration === 0) {
-				return { success: false, error: "Project is empty" };
+				return { success: false, error: "O projeto está vazio" };
 			}
 
 			const { canvasSize, fps } = activeProject.settings;
@@ -119,7 +164,7 @@ export class RendererManager {
 			});
 
 			if (!blob) {
-				return { success: false, error: "Failed to create image" };
+				return { success: false, error: "Falha ao criar imagem" };
 			}
 
 			const timecode = formatTimecode({ time: renderTime, rate: fps })!.replace(/:/g, "-");
@@ -133,7 +178,7 @@ export class RendererManager {
 			console.error("Snapshot capture failed:", error);
 			return {
 				success: false,
-				error: error instanceof Error ? error.message : "Unknown error",
+				error: error instanceof Error ? error.message : "Erro desconhecido",
 			};
 		}
 	}

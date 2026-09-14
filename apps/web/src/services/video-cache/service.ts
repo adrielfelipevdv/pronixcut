@@ -6,13 +6,27 @@ import {
 	type WrappedCanvas,
 } from "mediabunny";
 
+// How many decoded frames to keep buffered ahead of the currently displayed
+// one. During continuous playback, decoding happens in this buffer instead
+// of on the render's critical path, so a render tick that's briefly slower
+// than 1/fps (extra tracks, effects, GPU upload) can still be served
+// instantly from the buffer instead of falling behind far enough to trigger
+// an expensive re-seek of the decoder.
+const PREFETCH_DEPTH = 4;
+
+// How far ahead of the last known decoded position we're willing to
+// sequentially decode-and-discard frames to catch up, before giving up and
+// doing a full seek instead. Sequential decoding is much cheaper than a seek
+// (no keyframe search), so it's worth tolerating a real gap here.
+const SEQUENTIAL_CATCHUP_WINDOW_SECONDS = 2.0;
+
 interface VideoSinkData {
 	input: Input;
 	sink: CanvasSink;
 	iterator: AsyncGenerator<WrappedCanvas, void, unknown> | null;
 	currentFrame: WrappedCanvas | null;
-	nextFrame: WrappedCanvas | null;
-	lastTime: number;
+	frameQueue: WrappedCanvas[];
+	lastDecodedTime: number;
 	prefetching: boolean;
 	prefetchPromise: Promise<void> | null;
 }
@@ -61,42 +75,71 @@ export class VideoCache {
 		sinkData: VideoSinkData;
 		time: number;
 	}): Promise<WrappedCanvas | null> {
-		if (sinkData.nextFrame && sinkData.nextFrame.timestamp <= time) {
-			sinkData.currentFrame = sinkData.nextFrame;
-			sinkData.nextFrame = null;
-			this.startPrefetch({ sinkData });
-		}
-
+		// Fast path: the frame we're already showing still covers this time.
 		if (
 			sinkData.currentFrame &&
 			this.isFrameValid({ frame: sinkData.currentFrame, time })
 		) {
-			if (!sinkData.nextFrame && !sinkData.prefetching) {
-				this.startPrefetch({ sinkData });
-			}
+			this.topUpPrefetch({ sinkData });
 			return sinkData.currentFrame;
 		}
 
+		// Next-fastest path: advance through the already-decoded lookahead
+		// buffer. This is the common case during smooth continuous playback —
+		// no decoding happens on this call at all.
+		const buffered = this.consumeFromQueue({ sinkData, time });
+		if (buffered) {
+			this.topUpPrefetch({ sinkData });
+			return buffered;
+		}
+
+		// Moderate path: we're behind, but close enough to the last decoded
+		// position that decoding forward sequentially is cheaper than a seek.
 		if (
 			sinkData.iterator &&
-			sinkData.currentFrame &&
-			time >= sinkData.lastTime &&
-			time < sinkData.lastTime + 2.0
+			sinkData.lastDecodedTime >= 0 &&
+			time >= sinkData.lastDecodedTime &&
+			time < sinkData.lastDecodedTime + SEQUENTIAL_CATCHUP_WINDOW_SECONDS
 		) {
 			const frame = await this.iterateToTime({ sinkData, targetTime: time });
 			if (frame) {
-				if (!sinkData.nextFrame && !sinkData.prefetching) {
-					this.startPrefetch({ sinkData });
-				}
+				this.topUpPrefetch({ sinkData });
 				return frame;
 			}
 		}
 
+		// Slow path: a real seek (scrub, jump, or falling too far behind).
 		const frame = await this.seekToTime({ sinkData, time });
-		if (frame && !sinkData.nextFrame && !sinkData.prefetching) {
-			this.startPrefetch({ sinkData });
+		if (frame) {
+			this.topUpPrefetch({ sinkData });
 		}
 		return frame;
+	}
+
+	/** Advances currentFrame through the buffered queue to cover `time`, without decoding. */
+	private consumeFromQueue({
+		sinkData,
+		time,
+	}: {
+		sinkData: VideoSinkData;
+		time: number;
+	}): WrappedCanvas | null {
+		let match: WrappedCanvas | null = null;
+		while (sinkData.frameQueue.length > 0) {
+			const candidate = sinkData.frameQueue[0];
+			if (time < candidate.timestamp) break;
+
+			sinkData.frameQueue.shift();
+			sinkData.currentFrame = candidate;
+
+			if (this.isFrameValid({ frame: candidate, time })) {
+				match = candidate;
+				break;
+			}
+			// Otherwise `candidate` is already stale relative to `time` (we've
+			// moved past it); keep advancing through the queue.
+		}
+		return match;
 	}
 
 	private isFrameValid({
@@ -108,6 +151,7 @@ export class VideoCache {
 	}): boolean {
 		return time >= frame.timestamp && time < frame.timestamp + frame.duration;
 	}
+
 	private async iterateToTime({
 		sinkData,
 		targetTime,
@@ -119,30 +163,20 @@ export class VideoCache {
 
 		try {
 			while (true) {
-				// Wait for any pending prefetch to finish before touching iterator
 				if (sinkData.prefetching && sinkData.prefetchPromise) {
 					await sinkData.prefetchPromise;
+					const buffered = this.consumeFromQueue({
+						sinkData,
+						time: targetTime,
+					});
+					if (buffered) return buffered;
 				}
 
-				// Check if the nextFrame (which might have just arrived) is what we need
-				if (
-					sinkData.nextFrame &&
-					sinkData.nextFrame.timestamp <= targetTime + 0.05 // Tolerance
-				) {
-					sinkData.currentFrame = sinkData.nextFrame;
-					sinkData.nextFrame = null;
-				} else {
-					const { value: frame, done } = await sinkData.iterator.next();
+				const { value: frame, done } = await sinkData.iterator.next();
+				if (done || !frame) break;
 
-					if (done || !frame) break;
-
-					sinkData.currentFrame = frame;
-				}
-
-				const frame = sinkData.currentFrame;
-				if (!frame) break;
-
-				sinkData.lastTime = frame.timestamp;
+				sinkData.currentFrame = frame;
+				sinkData.lastDecodedTime = frame.timestamp;
 
 				if (this.isFrameValid({ frame, time: targetTime })) {
 					return frame;
@@ -157,6 +191,7 @@ export class VideoCache {
 
 		return null;
 	}
+
 	private async seekToTime({
 		sinkData,
 		time,
@@ -174,16 +209,15 @@ export class VideoCache {
 				sinkData.iterator = null;
 			}
 
-			sinkData.nextFrame = null;
+			sinkData.frameQueue = [];
 			sinkData.iterator = sinkData.sink.canvases(time);
-			sinkData.lastTime = time;
+			sinkData.lastDecodedTime = time;
 
-			// Fetch current frame
 			const { value: frame } = await sinkData.iterator.next();
 
 			if (frame) {
 				sinkData.currentFrame = frame;
-				this.startPrefetch({ sinkData });
+				sinkData.lastDecodedTime = frame.timestamp;
 				return frame;
 			}
 		} catch (error) {
@@ -193,45 +227,47 @@ export class VideoCache {
 		return null;
 	}
 
-	private startPrefetch({ sinkData }: { sinkData: VideoSinkData }): void {
-		if (sinkData.prefetching || !sinkData.iterator || sinkData.nextFrame) {
+	/** Keeps decoding ahead in the background until the queue reaches PREFETCH_DEPTH. */
+	private topUpPrefetch({ sinkData }: { sinkData: VideoSinkData }): void {
+		if (
+			sinkData.prefetching ||
+			!sinkData.iterator ||
+			sinkData.frameQueue.length >= PREFETCH_DEPTH
+		) {
 			return;
 		}
 
 		sinkData.prefetching = true;
-		sinkData.prefetchPromise = this.prefetchNextFrame({ sinkData });
+		sinkData.prefetchPromise = this.prefetchLoop({ sinkData });
 	}
 
-	private async prefetchNextFrame({
+	private async prefetchLoop({
 		sinkData,
 	}: {
 		sinkData: VideoSinkData;
 	}): Promise<void> {
-		if (!sinkData.iterator) {
-			sinkData.prefetching = false;
-			sinkData.prefetchPromise = null;
-			return;
-		}
-
 		try {
-			const { value: frame, done } = await sinkData.iterator.next();
-
-			if (done || !frame) {
-				sinkData.prefetching = false;
-				sinkData.prefetchPromise = null;
-				return;
+			while (
+				sinkData.iterator &&
+				sinkData.frameQueue.length < PREFETCH_DEPTH
+			) {
+				const { value: frame, done } = await sinkData.iterator.next();
+				if (done || !frame) {
+					sinkData.iterator = null;
+					break;
+				}
+				sinkData.frameQueue.push(frame);
+				sinkData.lastDecodedTime = frame.timestamp;
 			}
-
-			sinkData.nextFrame = frame;
-			sinkData.prefetching = false;
-			sinkData.prefetchPromise = null;
 		} catch (error) {
 			console.warn("Prefetch failed:", error);
+			sinkData.iterator = null;
+		} finally {
 			sinkData.prefetching = false;
 			sinkData.prefetchPromise = null;
-			sinkData.iterator = null;
 		}
 	}
+
 	private async ensureSink({
 		mediaId,
 		file,
@@ -279,7 +315,7 @@ export class VideoCache {
 			}
 
 			const sink = new CanvasSink(videoTrack, {
-				poolSize: 3,
+				poolSize: PREFETCH_DEPTH + 2,
 				fit: "contain",
 			});
 
@@ -288,8 +324,8 @@ export class VideoCache {
 				sink,
 				iterator: null,
 				currentFrame: null,
-				nextFrame: null,
-				lastTime: -1,
+				frameQueue: [],
+				lastDecodedTime: -1,
 				prefetching: false,
 				prefetchPromise: null,
 			});
