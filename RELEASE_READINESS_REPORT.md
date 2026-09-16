@@ -85,7 +85,7 @@ Nenhum teste executado falhou após as correções. (2 arquivos de teste automat
 
 ## Testes não executados
 
-Ver seção "ITENS NÃO TESTADOS" abaixo — é a lista mais importante para quem for decidir o lançamento, porque cobre exatamente as áreas que este ambiente não permite verificar com honestidade (instalador NSIS completo assinado, auto-update real contra um release de teste, GPU dedicada/NVENC, desinstalação, teste em segunda máquina física, longa duração/memória).
+Ver seção "ITENS NÃO TESTADOS" abaixo — é a lista mais importante para quem for decidir o lançamento, porque cobre exatamente as áreas que este ambiente não permite verificar com honestidade (instalador NSIS assinado, auto-update real contra um release de teste, GPU dedicada/NVENC, teste em segunda máquina física, longa duração/memória).
 
 ## Performance
 
@@ -127,6 +127,15 @@ Salvar (autosave + Ctrl+S) e recarregar a página do editor preservou o estado d
 
 Não testado ao vivo (precisaria de duas versões publicadas e um ambiente de release controlado, que este ambiente não tem). Revisão de código: o updater (`electron-updater`) é desabilitado corretamente quando `!app.isPackaged` (não interfere em builds de dev), a checagem é adiada 15s após o startup e nunca bloqueia a criação da janela, e a instalação só ocorre com ação explícita do usuário. Isso é uma leitura de código, não um teste ao vivo — marcar como não verificado na prática.
 
+## Desinstalação
+
+**Testado com o desinstalador real, clicado pelo usuário** (`Uninstall PronixCut.exe`, gerado pelo NSIS/electron-builder). Resultado:
+- Arquivos do app (.exe, resources, DLLs) removidos.
+- Atalho do Menu Iniciar removido.
+- Entrada em "Aplicativos instalados" do Windows (registro `HKCU\...\Uninstall\`) removida.
+- **Dados de usuário preservados corretamente**: `AppData\Roaming\pronixcut-electron` (onde ficam projetos, biblioteca de áudio local, cache) **não foi tocado** — exatamente o comportamento esperado (desinstalar o app não apaga projetos do usuário).
+- Nota lateral do processo de teste: invocar o desinstalador a partir de um processo sem uma sessão de desktop interativa de verdade (ex: via `&` do git-bash) faz o instalador NSIS sair silenciosamente sem fazer nada — não é um bug do app, é uma limitação de como esses processos foram disparados nos meus primeiros testes. O teste que valeu foi a execução real, com o usuário clicando no diálogo.
+
 ## Segurança técnica
 
 - Nenhum secret real encontrado no código ou em arquivos versionados. `.env`/`.env.local` não são versionados; `.env.example` só tem placeholders.
@@ -150,7 +159,7 @@ Não testado ao vivo (precisaria de duas versões publicadas e um ambiente de re
 5. **Testar exportação 4K, 60fps, sem áudio, e cancelamento de export.**
 6. **Testar NVENC** se houver GPU NVIDIA disponível.
 7. Decidir e corrigir o `LICENSE`.
-8. **Testar desinstalação** (não testada nesta sessão).
+8. ~~Testar desinstalação~~ — **testado nesta sessão, passou** (ver "Desinstalação" abaixo).
 
 ---
 
@@ -159,6 +168,7 @@ Não testado ao vivo (precisaria de duas versões publicadas e um ambiente de re
 - [x] abre — validado via instalação real + `main.js` empacotado
 - [x] fecha — validado (processos encerrados normalmente nos testes)
 - [x] reabre — a mesma instalação real foi reaberta e verificada após o patch/rebuild, sem perda de estado
+- [x] desinstala — testado com o desinstalador real; arquivos/atalho/registro removidos, dados de projeto preservados
 
 # PROJETO
 - [x] cria
