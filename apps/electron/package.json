@@ -5,7 +5,8 @@
   "main": "main.js",
   "scripts": {
     "dev": "electron .",
-    "dist": "electron-builder --win"
+    "prepare:web": "node scripts/prepare-standalone.js",
+    "dist": "npm run prepare:web && electron-builder --win"
   },
   "devDependencies": {
     "electron": "^33.4.11",
@@ -23,6 +24,13 @@
       "preload.js",
       "updater.js",
       "icon.ico"
+    ],
+    "extraResources": [
+      {
+        "from": "resources/app",
+        "to": "app",
+        "filter": ["**/*"]
+      }
     ],
     "afterPack": "after-pack.js",
     "win": {

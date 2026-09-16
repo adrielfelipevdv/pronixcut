@@ -20,13 +20,22 @@ if (process.platform === "win32") {
 	app.setAppUserModelId("com.pronix.pronixcut");
 }
 
-// This launcher does not bundle a copy of the web app. Bun installs
-// dependencies as symlinks into a global, absolute-path content store, and
-// Next's standalone/trace-based output does not portably resolve those
-// symlinks once copied elsewhere. Instead, we run the real project in place
-// from its original checkout, which already works correctly.
-const PROJECT_ROOT = "C:\\Users\\Cliente\\Desktop\\opencut-classic";
-const webRoot = path.join(PROJECT_ROOT, "apps", "web");
+// The web app ships as a Next.js "standalone" server, pre-built and
+// dereferenced by scripts/prepare-standalone.js (run before packaging — see
+// apps/electron/package.json's "prepare:web" script) into resources/app.
+// That script's own comment explains why the raw `next build` output can't
+// just be copied as-is: Bun's node_modules layout leaves absolute-path
+// symlinks in the standalone tracer output pointing back at the dev
+// machine's checkout, which prepare-standalone.js resolves into real files.
+// Packaged builds get this via electron-builder's extraResources (unpacked
+// next to the exe, under resourcesPath/app); unpackaged dev runs use the
+// same folder locally so `npm run dev` after `npm run prepare:web` behaves
+// identically to the packaged app.
+const appResourcesRoot = app.isPackaged
+	? path.join(process.resourcesPath, "app")
+	: path.join(__dirname, "resources", "app");
+const webRoot = path.join(appResourcesRoot, "apps", "web");
+const serverEntry = path.join(webRoot, "server.js");
 
 function loadEnvFile(filePath) {
 	const env = {};
@@ -95,22 +104,23 @@ function waitForServer(url, timeoutMs = 60000) {
 }
 
 function startServer() {
-	if (!fs.existsSync(webRoot)) {
-		log(`Project not found at ${webRoot}`);
+	if (!fs.existsSync(serverEntry)) {
+		log(`Bundled server not found at ${serverEntry}`);
 		return;
 	}
 
-	const nextBin = path.join(webRoot, "node_modules", "next", "dist", "bin", "next");
 	const fileEnv = loadEnvFile(path.join(webRoot, ".env.local"));
 
-	log(`Starting "next start" from ${webRoot}`);
+	log(`Starting bundled standalone server from ${serverEntry}`);
 
-	serverProcess = fork(nextBin, ["start", "-p", String(PORT), "-H", "127.0.0.1"], {
+	serverProcess = fork(serverEntry, [], {
 		cwd: webRoot,
 		env: {
 			...process.env,
 			...fileEnv,
 			NODE_ENV: "production",
+			PORT: String(PORT),
+			HOSTNAME: "127.0.0.1",
 			// Lets server-side routes (e.g. the Sounds & effects local audio
 			// library) persist real files under Electron's per-user app data
 			// folder instead of somewhere inside the project checkout.
