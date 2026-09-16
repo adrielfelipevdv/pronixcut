@@ -2,13 +2,15 @@
 
 **Versão:** apps/web 0.1.0 / apps/electron (pronixcut-electron) 0.1.0
 **Data:** 2026-09-16
-**Build testado:** `next build` (production, output: standalone) + Electron shell (unpackaged dev run using the real `main.js`) + isolated standalone server run from a directory outside the dev checkout
+**Build testado:** `next build` (production, output: standalone) + instalador NSIS real (`PronixCut Setup 0.1.0.exe`, gerado nesta sessão) + instalação real feita pelo usuário via o assistente do instalador em `C:\Users\Cliente\PronixCut`
 
 ## Resumo
 
-Esta auditoria encontrou e corrigiu um **P0 que impedia o app de rodar em qualquer computador além desta máquina de desenvolvimento** — o problema mais importante possível para um lançamento, e o motivo pelo qual "compila" não seria suficiente como critério de pronto. Depois da correção, validei ponta a ponta (não só lendo código): build de produção real, servidor standalone rodando fora do checkout, o `main.js` real do Electron rodando contra esse bundle, criação de projeto, importação de mídia real, edição, timeline com waveform, texto, salvar/recarregar, e **duas exportações reais verificadas com `ffprobe`** (16:9 e 9:16), não apenas a UI dizendo que funcionou.
+Esta auditoria encontrou e corrigiu dois bugs de lançamento: um **P0 que impedia o app de rodar em qualquer computador além desta máquina de desenvolvimento**, e um **P1 encontrado durante a validação do P0** (a pasta `public/` do app empacotado vinha incompleta — faltavam ícones, manifest, fontes e a imagem de fundo da Home). Ambos foram corrigidos e reverificados.
 
-Não há mais P0/P1 conhecidos após os testes executados. Há pendências P2 documentadas abaixo (principalmente coisas que não pude testar neste ambiente — instalador NSIS completo, auto-update real, GPU/NVENC) que precisam de validação antes do lançamento público.
+A validação não ficou só na leitura de código: gerei o instalador NSIS de verdade (`npm run dist`), e o usuário o instalou interativamente em `C:\Users\Cliente\PronixCut` — a mesma forma como um usuário final instalaria. Depois da instalação real, confirmei via HTTP que a Home carrega com título, imagem de fundo, manifest e ícone corretos (todos HTTP 200), sem nenhum patch manual — só o instalador oficial. Além disso: criação de projeto, importação de mídia real, edição, timeline com waveform, texto, salvar/recarregar, e **duas exportações reais verificadas com `ffprobe`** (16:9 e 9:16), não apenas a UI dizendo que funcionou.
+
+Não há mais P0/P1 conhecidos após os testes executados.
 
 ## P0 — Blockers
 
@@ -19,7 +21,8 @@ Não há mais P0/P1 conhecidos após os testes executados. Há pendências P2 do
 
 ## P1 — Críticos
 
-Nenhum encontrado nos testes executados.
+### P1-1 — RESOLVIDO: pasta `public/` do app empacotado vinha incompleta
+Encontrado ao vivo: a imagem de fundo da Home (e junto dela manifest.json, favicon, fontes, ícones, logos — 8 de 14 entradas de `public/`) não carregava no app recém-instalado. Ver "Bugs encontrados e corrigidos" #2.
 
 ## P2 — Importantes
 
@@ -44,7 +47,14 @@ Nenhum encontrado nos testes executados.
 - **Correção:** novo `apps/electron/scripts/prepare-standalone.js`, que roda depois do `next build` e antes do `electron-builder`: desreferencia todos os symlinks (copia o conteúdo real), copia `.next/static` (que o modo standalone não inclui por padrão), e materializa a camada plana `node_modules/.bun/node_modules/*` do Bun como pacotes reais no nível esperado. `main.js` agora roda esse `server.js` empacotado via `resourcesPath` (build final) / `apps/electron/resources/app` (dev), em vez de `next start` num caminho fixo. `electron-builder` agora empacota esse diretório via `extraResources`.
 - **Teste pós-correção:** (1) rodei `server.js` do bundle preparado a partir de `C:\PronixCutPortableTest`, totalmente fora do checkout — `200 OK`, título "PronixCut", `/api/health` OK; (2) rodei o `main.js` real do Electron (não empacotado, mas usando exatamente o mesmo bundle via o mesmo caminho de resolução) — log do próprio app mostra "Starting bundled standalone server..." seguido de "Ready in 1246ms" e o app serviu corretamente em `127.0.0.1:3100`; (3) o próprio script confirma zero symlinks restantes antes de finalizar.
 
-### #2 — (Herdado de sessão anterior, já corrigido antes desta auditoria) Digitação na Caixinha de perguntas / campos de texto do Inspector perdia caracteres
+### #2 — App empacotado servia menos da metade da pasta `public/` (P1)
+- **Severidade:** P1
+- **Descrição:** encontrado ao vivo, não por inspeção de código: depois de corrigir o bug #1, o usuário reportou que a imagem de fundo da Home não aparecia no app recém-instalado. Investigação: `manifest.json`, `favicon.ico`, e a pasta `backgrounds/` (entre outras) devolviam 404 — apenas 2 dos 14 itens do `public/` real tinham sido copiados para o bundle standalone.
+- **Causa raiz:** o output `standalone` do Next.js só copia o subconjunto de `public/` que seu rastreador de arquivos consegue provar que é referenciado por código rastreado (ex: usos de `next/image`) — não a pasta inteira. A imagem de fundo é referenciada só via uma string CSS `url(...)`, que o rastreador não enxerga. Isso é uma limitação documentada do próprio Next, não específica deste projeto.
+- **Correção:** `prepare-standalone.js` agora copia a pasta `public/` real inteira por cima da cópia parcial do rastreador (mesmo padrão já usado para `.next/static`).
+- **Teste pós-correção:** confirmado de duas formas — (1) apliquei o patch diretamente na instalação já aberta do usuário e o background passou de 404 para 200 sem reinstalar; (2) gerei o instalador NSIS final com a correção incluída, o usuário o instalou do zero via o assistente interativo em `C:\Users\Cliente\PronixCut`, e confirmei via HTTP que Home, manifest, favicon e imagem de fundo devolvem 200 — usando só o instalador oficial, sem nenhum patch manual.
+
+### #3 — (Herdado de sessão anterior, já corrigido antes desta auditoria) Digitação na Caixinha de perguntas / campos de texto do Inspector perdia caracteres
 Não é um achado desta auditoria — já corrigido em sessão anterior (causa: `PropertiesPanel` não reagia ao overlay de preview do `timeline-manager` durante a digitação). Re-testado durante o smoke test desta auditoria: sem regressão observada (edição de texto, importação, timeline e salvamento funcionaram sem reintroduzir o sintoma).
 
 ## Testes executados
@@ -63,6 +73,7 @@ Não é um achado desta auditoria — já corrigido em sessão anterior (causa: 
   - 16:9 padrão: MP4, H.264 1280×720 @30fps, AAC 48kHz estéreo, duração ~4.01s — todos batendo com o projeto/clipe fonte.
   - Preset "Reels / Shorts 1080×1920": MP4, H.264 **1080×1920** @30fps, AAC, duração ~4.01s — resolução do preset realmente aplicada no arquivo final, não só na UI.
 - Portabilidade do bundle Electron testada de 3 formas independentes (ver bug #1).
+- **Instalador NSIS real gerado e instalado de verdade**: `npm run dist` (`build:web` → `prepare:web` → `electron-builder --win`) rodado do zero, produziu `PronixCut Setup 0.1.0.exe` (258MB, ícone embutido, sem assinatura de código — esperado, sem certificado configurado). O usuário instalou interativamente em `C:\Users\Cliente\PronixCut`; confirmado via HTTP que Home/manifest/favicon/imagem de fundo servem 200 sem qualquer patch manual.
 
 ## Testes que passaram
 
@@ -100,7 +111,7 @@ Salvar (autosave + Ctrl+S) e recarregar a página do editor preservou o estado d
 
 ## Instalador
 
-Não gerei o instalador NSIS completo nesta auditoria (processo longo e, antes da correção do P0, seria inútil testá-lo). A configuração (`apps/electron/package.json`) foi revisada e corrigida (publisher, extraResources); o próprio pipeline de empacotamento (`npm run dist` → `prepare:web` → `electron-builder --win`) não foi executado de ponta a ponta nesta sessão. **Recomendo fortemente rodá-lo antes de qualquer distribuição pública** — a lógica de portabilidade foi validada de forma equivalente (bundle real rodando fora do checkout), mas o instalador .exe final em si (NSIS, ícone embutido, atalhos) não foi gerado e testado aqui.
+**Gerado e testado de ponta a ponta nesta sessão.** `npm run dist` (`build:web` → `prepare:web` → `electron-builder --win`) rodado do zero, produzindo `apps/electron/dist/PronixCut Setup 0.1.0.exe` (258MB). O usuário instalou interativamente (assistente NSIS, `oneClick:false`) em `C:\Users\Cliente\PronixCut` — o mesmo fluxo que um usuário final usaria. Pós-instalação, confirmado via HTTP: Home carrega, título "PronixCut", ícone embutido no .exe, manifest/favicon/imagem de fundo todos 200. Não assinado digitalmente (sem certificado de code signing configurado — Windows SmartScreen provavelmente vai avisar "editor desconhecido" até isso ser configurado; publisher name "Pronix" já corrigido, o que ajuda mas não substitui assinatura). Instalação silenciosa via `/S /D=<dir>` não se mostrou confiável neste ambiente de teste (não é o fluxo que um usuário final usaria de qualquer forma — o assistente interativo funcionou perfeitamente).
 
 ## Auto-update
 
@@ -122,20 +133,22 @@ Não testado ao vivo (precisaria de duas versões publicadas e um ambiente de re
 
 ## Pendências antes do download público
 
-1. **Gerar e testar o instalador NSIS final** (`npm run dist` em `apps/electron`), incluindo instalação limpa numa segunda máquina/VM sem Node/Bun/dev tools.
-2. **Testar auto-update real** com duas versões publicadas num release de teste.
-3. **Profiling de performance real** (FPS/CPU/RAM/dropped frames) numa sessão de uso prolongado, idealmente numa máquina "comum" (não a de desenvolvimento).
-4. **Testar exportação 4K, 60fps, sem áudio, e cancelamento de export.**
-5. **Testar NVENC** se houver GPU NVIDIA disponível.
-6. Decidir e corrigir o `LICENSE`.
+1. **Instalar numa segunda máquina física sem Node/Bun/dev tools** — só foi testado nesta máquina de dev (embora usando o instalador real, não uma cópia manual).
+2. **Code signing do instalador** — hoje mostra "Unknown Publisher"/SmartScreen ao usuário final.
+3. **Testar auto-update real** com duas versões publicadas num release de teste.
+4. **Profiling de performance real** (FPS/CPU/RAM/dropped frames) numa sessão de uso prolongado, idealmente numa máquina "comum" (não a de desenvolvimento).
+5. **Testar exportação 4K, 60fps, sem áudio, e cancelamento de export.**
+6. **Testar NVENC** se houver GPU NVIDIA disponível.
+7. Decidir e corrigir o `LICENSE`.
+8. **Testar desinstalação** (não testada nesta sessão).
 
 ---
 
 # APLICATIVO
-- [x] instala — não testado (instalador não gerado nesta sessão); lógica de portabilidade validada por 3 vias independentes
-- [x] abre — validado via `main.js` real (dev) + servidor standalone isolado
+- [x] instala — testado com o instalador NSIS real, instalação interativa feita pelo usuário
+- [x] abre — validado via instalação real + `main.js` empacotado
 - [x] fecha — validado (processos encerrados normalmente nos testes)
-- [ ] reabre — validado a nível de página/projeto (recarregar preservou estado); não validado como reabertura real do .exe empacotado
+- [x] reabre — a mesma instalação real foi reaberta e verificada após o patch/rebuild, sem perda de estado
 
 # PROJETO
 - [x] cria
@@ -172,10 +185,11 @@ Não testado ao vivo (precisaria de duas versões publicadas e um ambiente de re
 - [x] metadata confirmada (ffprobe)
 
 # DISTRIBUIÇÃO
-- [ ] installer — config corrigida, não gerado/testado nesta sessão
-- [x] ícone (arquivo existe no caminho referenciado)
-- [x] nome (PronixCut consistente no app; "Unknown Publisher" corrigido)
+- [x] installer — gerado e instalado de verdade nesta sessão (`PronixCut Setup 0.1.0.exe`)
+- [x] ícone (embutido no .exe, confirmado visualmente)
+- [x] nome (PronixCut consistente no app; publisher "Unknown" corrigido para "Pronix")
 - [x] versionamento (0.1.0 consistente entre web/electron)
+- [ ] assinatura de código — não configurada (SmartScreen vai avisar "editor desconhecido")
 
 # UPDATE
 - [x] checagem não quebra offline (confirmado por leitura de código: updater roda 15s após startup, nunca bloqueia a janela)
