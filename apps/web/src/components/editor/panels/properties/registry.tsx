@@ -93,6 +93,16 @@ const TEXT_STYLE_PARAM_KEYS = [
 	...BLENDING_PARAM_KEYS,
 ] as const;
 
+// Every text style field except the literal text itself — editing one of
+// these on a caption propagates the same value to every other text element
+// on the same track (see ElementParamsTab's `propagateParamKeys`), matching
+// how caption tracks behave elsewhere: style one line, the whole line
+// updates. Deliberately excludes "content" (each caption's own words) and
+// opacity/blendMode/transform (kept per-element).
+const TEXT_STYLE_PROPAGATION_KEYS = TEXT_PARAM_KEYS.filter(
+	(key) => key !== "content",
+);
+
 const INSTAGRAM_QUESTION_CONTENT_PARAM_KEYS = [
 	"header.content",
 	"question.content",
@@ -269,6 +279,7 @@ function buildTextTab({ element }: { element: TextElement }): PropertiesTabDef {
 					paramKeys={TEXT_CORE_PARAM_KEYS}
 					sectionKey="text"
 					fieldLayout="row"
+					propagateParamKeys={TEXT_STYLE_PROPAGATION_KEYS}
 				/>
 				<div className="flex items-center gap-2 px-3.5 pt-1 pb-3.5">
 					<SaveTextPresetButton element={element} />
@@ -296,6 +307,7 @@ function buildTextStyleTab({
 					paramKeys={TEXT_STYLE_PARAM_KEYS}
 					sectionKey="text-style"
 					fieldLayout="row"
+					propagateParamKeys={TEXT_STYLE_PROPAGATION_KEYS}
 				/>
 				<div className="px-3.5">
 					<FadeControls

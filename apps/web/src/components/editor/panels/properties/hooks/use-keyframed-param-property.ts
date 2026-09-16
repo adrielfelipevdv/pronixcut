@@ -38,6 +38,7 @@ export function useKeyframedParamProperty({
 	isPlayheadWithinElementRange,
 	resolvedValue,
 	buildBaseUpdates,
+	additionalTargets,
 }: {
 	param: ParamDefinition;
 	trackId: string;
@@ -52,6 +53,23 @@ export function useKeyframedParamProperty({
 	}: {
 		value: number | string | boolean;
 	}) => Partial<TimelineElement>;
+	/**
+	 * Other elements (e.g. sibling captions on the same track) that should
+	 * receive this same param value whenever it changes — batched into the
+	 * same preview/commit as the edited element, so it's one undo step, not
+	 * one per sibling. Only applied on the plain (non-keyframed) path: a
+	 * value being keyframed at a specific time is presumed intentionally
+	 * per-element, not something to fan out.
+	 */
+	additionalTargets?: Array<{
+		trackId: string;
+		elementId: string;
+		buildUpdates: ({
+			value,
+		}: {
+			value: number | string | boolean;
+		}) => Partial<TimelineElement>;
+	}>;
 }): KeyframedParamPropertyResult {
 	const editor = useEditor();
 	const resolvedPropertyPath =
@@ -106,6 +124,11 @@ export function useKeyframedParamProperty({
 					elementId,
 					updates: buildBaseUpdates({ value }),
 				},
+				...(additionalTargets ?? []).map((target) => ({
+					trackId: target.trackId,
+					elementId: target.elementId,
+					updates: target.buildUpdates({ value }),
+				})),
 			],
 		});
 	};

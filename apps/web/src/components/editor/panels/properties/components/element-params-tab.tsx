@@ -5,6 +5,7 @@ import { Section, SectionContent, SectionFields } from "@/components/section";
 import { useElementPlayhead } from "@/components/editor/panels/properties/hooks/use-element-playhead";
 import { useKeyframedParamProperty } from "@/components/editor/panels/properties/hooks/use-keyframed-param-property";
 import { PropertyParamField } from "@/components/editor/panels/properties/components/property-param-field";
+import { useEditor } from "@/editor/use-editor";
 import type { ParamValue, ParamValues } from "@/params";
 import {
 	getElementParams,
@@ -21,12 +22,21 @@ export function ElementParamsTab({
 	paramKeys,
 	sectionKey,
 	fieldLayout = "stack",
+	propagateParamKeys,
 }: {
 	element: TimelineElement;
 	trackId: string;
 	paramKeys?: readonly string[];
 	sectionKey: string;
 	fieldLayout?: "stack" | "row";
+	/**
+	 * Param keys that, when edited, should also apply to every other element
+	 * of the same type on this track (e.g. sibling captions sharing a text
+	 * track) — one style edit updates the whole line, matching how caption
+	 * tracks read elsewhere (DaVinci et al). Leave unset for normal
+	 * single-element editing.
+	 */
+	propagateParamKeys?: readonly string[];
 }) {
 	const { localTime, isPlayheadWithinElementRange } = useElementPlayhead({
 		startTime: element.startTime,
@@ -36,6 +46,10 @@ export function ElementParamsTab({
 		(param) => !paramKeys || paramKeys.includes(param.key),
 	);
 	const baseValues = buildValues({ element, params });
+	const track = useEditor((e) => e.timeline.getTrackById({ trackId }));
+	const siblingElements = (track?.elements ?? []).filter(
+		(sibling) => sibling.id !== element.id && sibling.type === element.type,
+	);
 
 	return (
 		<Section sectionKey={`${element.id}:${sectionKey}`}>
@@ -53,6 +67,11 @@ export function ElementParamsTab({
 								localTime={localTime}
 								isPlayheadWithinElementRange={isPlayheadWithinElementRange}
 								layout={fieldLayout}
+								propagateTargets={
+									propagateParamKeys?.includes(param.key)
+										? siblingElements
+										: undefined
+								}
 							/>
 						))}
 				</SectionFields>
@@ -69,6 +88,7 @@ function ElementParamField({
 	localTime,
 	isPlayheadWithinElementRange,
 	layout,
+	propagateTargets,
 }: {
 	element: TimelineElement;
 	trackId: string;
@@ -77,6 +97,7 @@ function ElementParamField({
 	localTime: MediaTime;
 	isPlayheadWithinElementRange: boolean;
 	layout: "stack" | "row";
+	propagateTargets?: TimelineElement[];
 }) {
 	const field = useElementParamField({
 		element,
@@ -85,6 +106,7 @@ function ElementParamField({
 		baseValue,
 		localTime,
 		isPlayheadWithinElementRange,
+		propagateTargets,
 	});
 
 	// A multiline textarea (the caption/text content itself) never fits a
@@ -117,6 +139,7 @@ export function useElementParamField({
 	baseValue,
 	localTime,
 	isPlayheadWithinElementRange,
+	propagateTargets,
 }: {
 	element: TimelineElement;
 	trackId: string;
@@ -124,6 +147,9 @@ export function useElementParamField({
 	baseValue: ParamValue;
 	localTime: MediaTime;
 	isPlayheadWithinElementRange: boolean;
+	/** Sibling elements (same track, same type) to apply this same param value
+	 * to whenever it changes — see ElementParamsTab's `propagateParamKeys`. */
+	propagateTargets?: TimelineElement[];
 }): {
 	value: ParamValue;
 	onPreview: (value: ParamValue) => void;
@@ -136,6 +162,12 @@ export function useElementParamField({
 		localTime,
 		fallbackValue: baseValue,
 	});
+	const additionalTargets = propagateTargets?.map((sibling) => ({
+		trackId,
+		elementId: sibling.id,
+		buildUpdates: ({ value }: { value: ParamValue }) =>
+			writeElementParamValue({ element: sibling, param, value }),
+	}));
 	const animatedParam = useKeyframedParamProperty({
 		param,
 		trackId,
@@ -147,6 +179,7 @@ export function useElementParamField({
 		resolvedValue,
 		buildBaseUpdates: ({ value }) =>
 			writeElementParamValue({ element, param, value }),
+		additionalTargets,
 	});
 
 	return {

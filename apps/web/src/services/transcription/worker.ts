@@ -138,17 +138,17 @@ async function handleTranscribe({
 			chunk_length_s: DEFAULT_CHUNK_LENGTH_SECONDS,
 			stride_length_s: DEFAULT_STRIDE_SECONDS,
 			language: language === "auto" ? undefined : language,
-			// Word-level timestamps (one chunk per word) instead of whole-
-			// segment timestamps. Segment-level timestamps mark only where a
-			// sentence/phrase starts and ends, so caption.ts previously had to
-			// *guess* each word's position inside that span by linearly
-			// spreading word count over the segment's duration — which drifts
-			// badly whenever a segment contains a pause (breath, hesitation,
-			// silence) the model didn't split on. That drift is worse for
-			// non-English audio, where Whisper's segment boundaries are
-			// already looser than for English. Real per-word timestamps
-			// remove the guesswork entirely.
-			return_timestamps: "word",
+			// NOTE: word-level timestamps (`return_timestamps: "word"`) would
+			// give each caption its real per-word timing instead of the
+			// linear-interpolation guess in caption.ts (see there for why that
+			// guess drifts). Tried it here — every onnx-community/whisper-*
+			// model in models.ts throws "Model outputs must contain cross
+			// attentions to extract timestamps... not exported with
+			// output_attentions=True" — these particular ONNX exports don't
+			// support word-level timestamp extraction at all, only segment-
+			// level. Confirmed live, not by reading docs. Would need a
+			// different model export (or a non-ONNX runtime) to revisit.
+			return_timestamps: true,
 		});
 
 		if (cancelled) return;
