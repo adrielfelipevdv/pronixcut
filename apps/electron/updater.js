@@ -1,5 +1,18 @@
 const { app, ipcMain } = require("electron");
 const { autoUpdater } = require("electron-updater");
+const fs = require("node:fs");
+const path = require("node:path");
+
+// Written right before the app quits to apply a silently-installed update,
+// and checked by main.js on the NEXT launch so it can show "Atualizando o
+// PronixCut..." instead of the ordinary blank-window startup gap. Deleted as
+// soon as main.js has read it, so a crash mid-update can't wedge every
+// future launch into thinking it's mid-update forever. Computed lazily
+// (not at module load) since `app.getPath` is only meant to be called once
+// the app is ready.
+function getPendingUpdateMarkerPath() {
+	return path.join(app.getPath("userData"), "pending-update.json");
+}
 
 // Silent, well after launch — never competes with startup for network/CPU.
 const CHECK_DELAY_AFTER_START_MS = 15_000;
@@ -62,9 +75,11 @@ function setupAutoUpdater({ mainWindow, log }) {
 			total: progress.total,
 		}),
 	);
-	autoUpdater.on("update-downloaded", (info) =>
-		send({ state: "downloaded", version: info.version }),
-	);
+	let downloadedVersion = null;
+	autoUpdater.on("update-downloaded", (info) => {
+		downloadedVersion = info.version;
+		send({ state: "downloaded", version: info.version });
+	});
 	autoUpdater.on("error", (err) => {
 		log(`[updater] error: ${err?.stack || err}`);
 		// Complementary, never fatal: the editor keeps running either way.
@@ -120,7 +135,25 @@ function setupAutoUpdater({ mainWindow, log }) {
 		// Give the renderer a chance to flush the current project (autosave)
 		// before the app quits out from under it.
 		await flushRendererBeforeQuit();
-		autoUpdater.quitAndInstall();
+		// Read by main.js on the next launch so it can show "Atualizando o
+		// PronixCut..." during the relaunch instead of the ordinary blank-
+		// window startup gap — see getPendingUpdateMarkerPath's own comment.
+		try {
+			fs.writeFileSync(
+				getPendingUpdateMarkerPath(),
+				JSON.stringify({ version: downloadedVersion }),
+			);
+		} catch (err) {
+			log(`[updater] failed to write pending-update marker: ${err?.message ?? err}`);
+		}
+		// quitAndInstall(isSilent, isForceRunAfter) — both default to `false`.
+		// Leaving isSilent at its default ran the NSIS installer in full
+		// interactive mode (its own wizard window, requiring the user to
+		// click through Next/Install again) instead of applying the update
+		// invisibly in the background. isForceRunAfter=true relaunches
+		// PronixCut automatically once the silent install finishes, so the
+		// user ends up back in the app with no manual steps at all.
+		autoUpdater.quitAndInstall(true, true);
 		return { ok: true };
 	});
 
@@ -133,4 +166,24 @@ function setupAutoUpdater({ mainWindow, log }) {
 	};
 }
 
-module.exports = { setupAutoUpdater };
+/**
+ * Reads and clears the pending-update marker (if any). Called once, early
+ * in main.js's startup, to decide whether this launch is "relaunching right
+ * after a silent update install" vs. an ordinary cold start. Clearing it
+ * immediately (rather than after the window loads) means a crash right
+ * after this call still can't wedge every future launch into showing the
+ * update splash forever.
+ */
+function consumePendingUpdateMarker() {
+	const markerPath = getPendingUpdateMarkerPath();
+	try {
+		const raw = fs.readFileSync(markerPath, "utf8");
+		fs.unlinkSync(markerPath);
+		const parsed = JSON.parse(raw);
+		return { version: typeof parsed.version === "string" ? parsed.version : null };
+	} catch {
+		return null;
+	}
+}
+
+module.exports = { setupAutoUpdater, consumePendingUpdateMarker };

@@ -3,7 +3,7 @@ const path = require("node:path");
 const fs = require("node:fs");
 const http = require("node:http");
 const { fork } = require("node:child_process");
-const { setupAutoUpdater } = require("./updater");
+const { setupAutoUpdater, consumePendingUpdateMarker } = require("./updater");
 
 // Works around a common Windows issue where certain GPU drivers render the
 // BrowserWindow as a persistent blank white screen.
@@ -141,6 +141,53 @@ function startServer() {
 	serverProcess.on("error", (err) => log(`Server process error: ${err.stack || err}`));
 }
 
+// Shown immediately after createWindow(), replacing the brief blank-white
+// gap that otherwise sits there while the bundled Next.js server boots
+// (see the disableHardwareAcceleration comment above — some GPU drivers
+// render that gap as a stuck white flash). When `pendingUpdate` is set, the
+// message reflects that this launch is relaunching right after a silent
+// update install rather than an ordinary cold start.
+function showLoadingScreen({ pendingUpdate }) {
+	const message = pendingUpdate?.version
+		? `Atualizando o PronixCut para a versão ${pendingUpdate.version}…`
+		: "Iniciando o PronixCut…";
+	const html = `data:text/html,${encodeURIComponent(`
+		<html>
+			<head>
+				<style>
+					html, body {
+						height: 100%;
+						margin: 0;
+						background: #0b0b0c;
+						color: #eaeaea;
+						font-family: -apple-system, "Segoe UI", sans-serif;
+						display: flex;
+						align-items: center;
+						justify-content: center;
+						flex-direction: column;
+						gap: 16px;
+					}
+					.spinner {
+						width: 32px;
+						height: 32px;
+						border-radius: 50%;
+						border: 3px solid rgba(255,255,255,0.15);
+						border-top-color: #FFC531;
+						animation: spin 0.8s linear infinite;
+					}
+					@keyframes spin { to { transform: rotate(360deg); } }
+					p { font-size: 14px; opacity: 0.85; margin: 0; }
+				</style>
+			</head>
+			<body>
+				<div class="spinner"></div>
+				<p>${message}</p>
+			</body>
+		</html>
+	`)}`;
+	mainWindow.loadURL(html);
+}
+
 function showStartupError(message) {
 	const escaped = message
 		.replace(/&/g, "&amp;")
@@ -207,7 +254,9 @@ ipcMain.handle("app:get-version", () => app.getVersion());
 app.whenReady().then(async () => {
 	fs.mkdirSync(userDataDir, { recursive: true });
 	configurePermissions();
+	const pendingUpdate = consumePendingUpdateMarker();
 	createWindow();
+	showLoadingScreen({ pendingUpdate });
 	startServer();
 
 	try {
