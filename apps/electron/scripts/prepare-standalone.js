@@ -11,8 +11,13 @@
 //      dereferences every symlink (copies the real target in its place) so
 //      the result has zero dependency on this machine's filesystem layout.
 //   2. Next's standalone output does not include .next/static (client JS/CSS
-//      chunks) or the trace files needed by some routes — those must be
-//      copied in manually per Next's own docs.
+//      chunks), and only copies the subset of public/ that its file-tracer
+//      can prove is referenced by traced code (next/image usages etc.) —
+//      not the whole folder. Both have to be copied in manually per Next's
+//      own docs. Caught for real: the packaged app's Home background image
+//      (public/backgrounds/pronixcut-home.jpg, only ever referenced via a
+//      plain CSS `url()` string, which the tracer can't see) 404'd because
+//      only 2 of the real public/ folder's 14 entries had survived tracing.
 //
 // Run after `next build` (apps/web) and before `electron-builder`. Output
 // lands in apps/electron/resources/app, which electron-builder packages via
@@ -28,6 +33,7 @@ const REPO_ROOT = path.join(ELECTRON_DIR, "..", "..");
 const WEB_DIR = path.join(REPO_ROOT, "apps", "web");
 const STANDALONE_SRC = path.join(WEB_DIR, ".next", "standalone");
 const STATIC_SRC = path.join(WEB_DIR, ".next", "static");
+const PUBLIC_SRC = path.join(WEB_DIR, "public");
 const OUT_DIR = path.join(ELECTRON_DIR, "resources", "app");
 
 function fail(message) {
@@ -77,6 +83,9 @@ function main() {
 	if (!fs.existsSync(STATIC_SRC)) {
 		fail(`Missing ${STATIC_SRC} — did "next build" fail partway?`);
 	}
+	if (!fs.existsSync(PUBLIC_SRC)) {
+		fail(`Missing ${PUBLIC_SRC}.`);
+	}
 
 	console.log(`[prepare-standalone] Clearing ${OUT_DIR}`);
 	rmrf(OUT_DIR);
@@ -94,6 +103,14 @@ function main() {
 	const staticDest = path.join(OUT_DIR, "apps", "web", ".next", "static");
 	console.log(`[prepare-standalone] Copying .next/static -> ${staticDest}`);
 	copyDereferenced(STATIC_SRC, staticDest);
+
+	// Overwrite, don't merge with, the tracer's partial public/ copy — a
+	// stale file the tracer picked up but the real public/ folder no longer
+	// has would otherwise survive indefinitely.
+	const publicDest = path.join(OUT_DIR, "apps", "web", "public");
+	console.log(`[prepare-standalone] Copying the full public/ folder -> ${publicDest}`);
+	rmrf(publicDest);
+	copyDereferenced(PUBLIC_SRC, publicDest);
 
 	const serverEntry = path.join(OUT_DIR, "apps", "web", "server.js");
 	if (!fs.existsSync(serverEntry)) {
