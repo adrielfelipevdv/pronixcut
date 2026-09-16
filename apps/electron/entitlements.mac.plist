@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+	Entitlements needed for Apple notarization with hardenedRuntime: true
+	(see apps/electron/package.json's "mac" config). This is a starting
+	point based on what Electron apps typically need, NOT verified against
+	a real macOS build/notarization run (no Mac available where this was
+	written) — expect to adjust after the first real `dist:mac` + notarize
+	attempt on an actual Mac.
+-->
+<plist version="1.0">
+	<dict>
+		<!-- Required for Electron's JIT (V8) under the hardened runtime. -->
+		<key>com.apple.security.cs.allow-jit</key>
+		<true/>
+		<key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+		<true/>
+		<key>com.apple.security.cs.allow-dyld-environment-variables</key>
+		<true/>
+		<key>com.apple.security.cs.disable-library-validation</key>
+		<true/>
+		<!-- Network access — used throughout the app (auto-updater, media
+		     search/import, the PronixEditor "Navegador" webview tab, etc). -->
+		<key>com.apple.security.network.client</key>
+		<true/>
+		<key>com.apple.security.network.server</key>
+		<true/>
+		<!-- File access for opening/saving projects and importing media. -->
+		<key>com.apple.security.files.user-selected.read-write</key>
+		<true/>
+	</dict>
+</plist>
