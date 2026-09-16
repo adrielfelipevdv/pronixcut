@@ -24,6 +24,18 @@ pub struct CanvasClearDescriptor {
 pub enum FrameItemDescriptor {
     Layer(LayerDescriptor),
     SceneEffect {
+        // `rename_all` on the enum renames the variant name used for the
+        // `type` tag (SceneEffect -> "sceneEffect") but does NOT cascade into
+        // this struct variant's own field name — unlike LayerDescriptor,
+        // which is a separate struct with its own `rename_all` attribute.
+        // Without this explicit rename, serde expected the literal
+        // `effect_pass_groups` key while the JS side (frame-descriptor.ts)
+        // always sends `effectPassGroups`, so every frame containing a
+        // scene-wide effect layer (e.g. the Blur effect added from the
+        // Efeitos panel) failed to deserialize and threw on every single
+        // render call — freezing the Viewer on the last successfully
+        // rendered frame while playback/timecode kept advancing normally.
+        #[serde(rename = "effectPassGroups")]
         effect_pass_groups: Vec<Vec<EffectPassDescriptor>>,
     },
 }

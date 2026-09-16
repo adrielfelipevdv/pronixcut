@@ -38,6 +38,7 @@ import {
 	getBookmarkPreviewOverlaySource,
 } from "@/timeline/bookmarks/index";
 import { RelinkDialog } from "@/project-file/components/relink-dialog";
+import { cn } from "@/utils/ui";
 
 export default function Editor() {
 	const params = useParams();
@@ -339,7 +340,26 @@ function EditorLayout() {
 						defaultSize={panels.tools}
 						minSize={TOOLS_COLLAPSED_SIZE}
 						maxSize={40}
-						className="min-w-0 transition-[flex-grow,flex-basis] duration-150 ease-out"
+						className={cn(
+							// react-resizable-panels sets this panel's width from a
+							// percentage of the row (`panels.tools`), which at common
+							// window widths comes out well under what the icon rail +
+							// AssetsPanel's own `min-w-[280px]` content need. `min-w-0`
+							// here let the panel render narrower than that content, so
+							// the content silently overflowed behind the panel's
+							// `overflow-hidden` instead of ever being visible — every
+							// tool tab (Mídia, Efeitos, Ajustes, Legendas, ...) rendered
+							// blank. This floor (icon rail ~188px + the 280px content
+							// floor) makes the ResizablePanel itself — not just its
+							// child — refuse to shrink past what its content needs; the
+							// sibling Preview/Properties panels give up the space instead
+							// (they don't set their own conflicting min-width floor).
+							// Collapsed (`TOOLS_COLLAPSED_SIZE`) still overrides this via
+							// the panel's own `.resize()` call above, which isn't a CSS
+							// min-width and so isn't blocked by this floor.
+							!sidebarCollapsed && "min-w-[468px]",
+							"transition-[flex-grow,flex-basis] duration-150 ease-out",
+						)}
 					>
 						<AssetsPanel />
 					</ResizablePanel>
