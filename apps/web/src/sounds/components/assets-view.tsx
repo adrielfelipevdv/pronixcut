@@ -83,10 +83,17 @@ function LocalAudioLibraryView() {
 	}, [audioElement]);
 
 	const handleFilesSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
-		const files = event.target.files;
+		// `event.target.files` is a live FileList tied to the input's current
+		// value, not a snapshot — clearing `.value` before reading it empties
+		// the very FileList this was about to convert to an array, so the
+		// import silently ran over zero files every time (no error, nothing
+		// imported — exactly the reported "arquivo não fica salvo"). Convert
+		// to a plain array first, clear the input after, same order the
+		// Mídia panel's own file-picker hook already uses correctly.
+		const files = Array.from(event.target.files ?? []);
 		event.target.value = "";
-		if (!files || files.length === 0) return;
-		await importFiles(Array.from(files));
+		if (files.length === 0) return;
+		await importFiles(files);
 	};
 
 	const playItem = (item: AudioLibraryItem) => {
