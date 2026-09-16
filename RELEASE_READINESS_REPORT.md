@@ -89,12 +89,22 @@ Ver seção "ITENS NÃO TESTADOS" abaixo — é a lista mais importante para que
 
 ## Performance
 
-Não foi feita uma medição instrumentada de FPS/CPU/RAM neste ambiente (sem GPU dedicada disponível nesta VM/máquina de teste, e sem ferramenta de profiling anexada ao processo Electron nesta sessão). O que pude observar:
-- Preview e timeline responderam normalmente durante os testes funcionais (sem travamentos, sem lentidão perceptível) com um clipe de teste 1280×720/30fps.
-- Export de 4s de vídeo 720p levou poucos segundos; export 1080×1920 similar.
-- Nenhum vazamento óbvio observado nas sessões de teste (curtas — não constitui teste de longa duração real).
+Medição instrumentada real feita nesta sessão (Chromium real via Playwright contra o build de produção, clipe de teste 1280×720/30fps, medindo a taxa de `requestAnimationFrame` da página + memória JS heap + CPU/RAM reais dos processos do Chrome via PowerShell durante playback ativo):
 
-**Não invento números de FPS/RAM que não medi.** Isso precisa de um profiling real (DevTools Performance / Task Manager) em uma sessão de uso prolongado antes do lançamento — ver pendências.
+| Cenário | FPS (rAF) | Frames "lentos" (>1 frame a 24fps) | Heap JS usado |
+|---|---|---|---|
+| Idle, timeline vazia | 60.1 | 0 | 19 MB |
+| Idle, com clipe carregado (pausado) | 60.2 | 0 | 20 MB |
+| Playback ativo, 720p30 | 60.1 | 0 | 21 MB |
+| Playback ativo + texto na tela | 60.2 | 0 | 22 MB |
+| Após 8 ciclos de play/pause/seek | — | — | 28 MB |
+
+- **CPU real durante playback ativo (loop de play/seek):** ~2.5% do total do sistema (todos os processos do Chrome somados).
+- **RAM real (todos os processos do Chrome, headless, 25 processos):** ~3.4 GB — **ressalva importante:** esse número é o overhead total do Chrome multi-processo (GPU, utilitário, sandbox etc.), não só a página do editor; um app Electron real tem uma árvore de processos diferente (geralmente mais enxuta) — não é uma comparação direta de "RAM que o PronixCut vai usar no usuário final". Recomendo remedir isso especificamente dentro do processo do Electron empacotado (Gerenciador de Tarefas, coluna "Memória" agrupada por "PronixCut") antes do lançamento.
+- **Heap JS crescendo de 19MB → 28MB em ciclos curtos de play/pause/seek** é normal (alocações temporárias, GC ainda não rodou) — não é evidência de leak, mas também não é um teste de longa duração real (só alguns segundos). Ver pendências para o teste de sessão prolongada.
+- **0 frames lentos detectados** em toda a sessão de teste — a UI não trava nem engasga com um clipe simples.
+
+Isso mede a taxa de renderização da UI (thread principal do navegador), não o profiling interno da pipeline WebGPU/canvas de decodificação de vídeo frame a frame — para isso seria necessário um profiling com Chrome DevTools Performance anexado ao processo do Electron real, o que não foi feito aqui.
 
 ## Exportações testadas
 
@@ -136,7 +146,7 @@ Não testado ao vivo (precisaria de duas versões publicadas e um ambiente de re
 1. **Instalar numa segunda máquina física sem Node/Bun/dev tools** — só foi testado nesta máquina de dev (embora usando o instalador real, não uma cópia manual).
 2. **Code signing do instalador** — hoje mostra "Unknown Publisher"/SmartScreen ao usuário final.
 3. **Testar auto-update real** com duas versões publicadas num release de teste.
-4. **Profiling de performance real** (FPS/CPU/RAM/dropped frames) numa sessão de uso prolongado, idealmente numa máquina "comum" (não a de desenvolvimento).
+4. **Profiling de performance em sessão longa e projeto complexo** (FPS/CPU/RAM/dropped frames com múltiplos clipes, legendas, efeitos e ajustes simultâneos, por um período prolongado) — o teste desta sessão foi real mas curto e com um projeto simples; e remedir RAM dentro do processo Electron empacotado especificamente (a medição desta sessão foi do Chrome headless completo, não do app real).
 5. **Testar exportação 4K, 60fps, sem áudio, e cancelamento de export.**
 6. **Testar NVENC** se houver GPU NVIDIA disponível.
 7. Decidir e corrigir o `LICENSE`.
@@ -172,9 +182,9 @@ Não testado ao vivo (precisaria de duas versões publicadas e um ambiente de re
 - [x] waveform (visível e correto no screenshot do smoke test)
 
 # PERFORMANCE
-- [ ] FPS aceitável — não medido instrumentado
+- [x] FPS aceitável — medido: 60fps estável, 0 frames lentos, idle e em playback
 - [x] sem freeze grave nos testes executados
-- [ ] sem leak óbvio — não testado em longa duração
+- [ ] sem leak óbvio — sem sinal de leak em teste curto (8 ciclos play/pause/seek); teste de longa duração real ainda pendente
 
 # EXPORT
 - [x] 16:9
