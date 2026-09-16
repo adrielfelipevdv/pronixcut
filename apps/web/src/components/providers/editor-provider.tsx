@@ -12,6 +12,7 @@ import { useEditorActions } from "@/actions/use-editor-actions";
 import { loadFontAtlas } from "@/fonts/google-fonts";
 import {
 	initializeGpuRenderer,
+	initializePreviewGpuRenderer,
 	isGpuAvailable,
 } from "@/services/renderer/gpu-renderer";
 
@@ -40,6 +41,11 @@ export function EditorProvider({ projectId, children }: EditorProviderProps) {
 				setIsLoading(true);
 				await initializeGpuRenderer();
 				editor.renderer.setDegraded(!isGpuAvailable());
+				// Independent of the compositor's own GPU context — see
+				// gpu-renderer.ts. Not on the critical path (effect/blur preview
+				// thumbnails just show their unprocessed source until it
+				// resolves), so it isn't awaited here.
+				void initializePreviewGpuRenderer();
 				await editor.project.loadProject({ id: projectId });
 
 				if (cancelled) return;

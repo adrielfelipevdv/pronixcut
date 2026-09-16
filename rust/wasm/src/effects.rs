@@ -8,7 +8,7 @@ use wasm_bindgen::{JsCast, JsValue, prelude::wasm_bindgen};
 
 use crate::gpu::{
     import_canvas_texture, read_offscreen_canvas_property, read_serde_property, read_u32_property,
-    render_texture_to_canvas, with_gpu_runtime,
+    render_texture_to_canvas, with_preview_gpu_runtime,
 };
 
 struct ApplyEffectPassesOptions {
@@ -41,7 +41,7 @@ pub fn apply_effect_passes(options: JsValue) -> Result<wgpu::web_sys::OffscreenC
         passes,
     } = parse_apply_effect_passes_options(options)?;
 
-    with_gpu_runtime(|runtime| {
+    with_preview_gpu_runtime(|runtime| {
         let source_texture = import_canvas_texture(
             &runtime.context,
             &source,

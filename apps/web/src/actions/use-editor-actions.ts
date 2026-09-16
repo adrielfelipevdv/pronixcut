@@ -26,6 +26,7 @@ import {
 	type ScopeEntry,
 } from "@/selection/scope";
 import { useCommittedRef } from "@/hooks/use-committed-ref";
+import { saveProjectFile, saveProjectFileAs } from "@/project-file/save";
 
 export function useEditorActions() {
 	const editor = useEditor();
@@ -489,6 +490,37 @@ export function useEditorActions() {
 		"redo",
 		() => {
 			editor.command.redo();
+		},
+		undefined,
+	);
+
+	useActionHandler(
+		"save-project",
+		() => {
+			const activeProject = editor.project.getActiveOrNull();
+			if (!activeProject) return;
+			// Flush the internal autosave immediately (the app's real,
+			// continuous persistence layer) alongside the explicit on-disk
+			// .pronixcut snapshot the user asked Ctrl+S to produce.
+			void editor.save.flush();
+			void saveProjectFile({
+				project: activeProject,
+				mediaAssets: editor.media.getAssets(),
+			});
+		},
+		undefined,
+	);
+
+	useActionHandler(
+		"save-project-as",
+		() => {
+			const activeProject = editor.project.getActiveOrNull();
+			if (!activeProject) return;
+			void editor.save.flush();
+			void saveProjectFileAs({
+				project: activeProject,
+				mediaAssets: editor.media.getAssets(),
+			});
 		},
 		undefined,
 	);

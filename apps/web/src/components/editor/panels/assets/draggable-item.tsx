@@ -18,6 +18,16 @@ import type { MediaTime } from "@/wasm";
 export interface DraggableItemProps {
 	name: string;
 	preview: ReactNode;
+	/**
+	 * Content for the floating drag-ghost that follows the cursor (which can
+	 * pass directly over the main preview/viewer while dragging). Defaults to
+	 * `preview`, which is correct for real project assets (media/stickers/
+	 * text — showing the actual thing you're dragging is expected there).
+	 * Effect cards pass something else here (an icon + name, no demo photo)
+	 * so a stock demonstration photo never appears to float "in" the video
+	 * preview mid-drag.
+	 */
+	dragGhost?: ReactNode;
 	dragData: TimelineDragData;
 	onDragStart?: ({ e }: { e: React.DragEvent }) => void;
 	onAddToTimeline?: ({ currentTime }: { currentTime: MediaTime }) => void;
@@ -34,6 +44,7 @@ export interface DraggableItemProps {
 export function DraggableItem({
 	name,
 	preview,
+	dragGhost,
 	dragData,
 	onDragStart,
 	onAddToTimeline,
@@ -182,7 +193,7 @@ export function DraggableItem({
 								className="ring-primary relative overflow-hidden rounded-md shadow-2xl ring-3"
 							>
 								<div className="size-full [&_img]:size-full [&_img]:rounded-none [&_img]:object-cover">
-									{preview}
+									{dragGhost ?? preview}
 								</div>
 								{shouldShowPlusOnDrag && (
 									<PlusButton

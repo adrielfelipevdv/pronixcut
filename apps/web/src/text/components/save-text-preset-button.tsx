@@ -41,11 +41,11 @@ export function SaveTextPresetButton({ element }: { element: TextElement }) {
 			<Button
 				variant="outline"
 				size="sm"
-				className="w-full gap-1.5"
+				className="flex-1 gap-1.5"
 				onClick={() => setIsOpen(true)}
 			>
 				<HugeiconsIcon icon={FloppyDiskIcon} className="size-3.5" />
-				Salvar como predefinição
+				Salvar
 			</Button>
 			<Dialog open={isOpen} onOpenChange={setIsOpen}>
 				<DialogContent className="max-w-sm">

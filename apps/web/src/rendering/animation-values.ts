@@ -45,5 +45,24 @@ export function resolveTransformAtTime({
 			localTime: safeLocalTime,
 			fallbackValue: baseTransform.rotate,
 		}),
+		anchor: {
+			x: resolveAnimationPathValueAtTime({
+				animations,
+				propertyPath: "transform.anchorX",
+				localTime: safeLocalTime,
+				fallbackValue: baseTransform.anchor.x,
+			}),
+			y: resolveAnimationPathValueAtTime({
+				animations,
+				propertyPath: "transform.anchorY",
+				localTime: safeLocalTime,
+				fallbackValue: baseTransform.anchor.y,
+			}),
+		},
+		// Flip is a discrete on/off toggle, not a continuously animated value
+		// (see visualElementParams — registered with keyframable: false, same
+		// as blendMode/muted), so it's read straight off the base transform.
+		flipHorizontal: baseTransform.flipHorizontal,
+		flipVertical: baseTransform.flipVertical,
 	};
 }

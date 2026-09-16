@@ -194,6 +194,8 @@ export interface NumberParamDefinition<TKey extends string = string>
 	unit?: "percent";
 	/** Short label shown as the scrub handle icon in the number field (e.g. "W", "R"). */
 	shortLabel?: string;
+	/** When set, renders a slider alongside the number field, bounded to this range (display space). Doesn't affect the real min/max clamp. */
+	uiSlider?: { min: number; max: number };
 }
 
 export interface BooleanParamDefinition<TKey extends string = string>
@@ -216,6 +218,8 @@ export interface SelectParamDefinition<TKey extends string = string>
 	default: string;
 	channels?: LeafChannelLayout<string>;
 	options: Array<{ value: string; label: string }>;
+	/** Renders as a compact icon button group instead of a dropdown. */
+	variant?: "buttons";
 }
 
 export interface TextParamDefinition<TKey extends string = string>

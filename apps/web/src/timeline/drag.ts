@@ -28,6 +28,10 @@ export interface GraphicDragData extends BaseDragData {
 	params: Partial<ParamValues>;
 }
 
+export interface InstagramQuestionDragData extends BaseDragData {
+	type: "instagramQuestion";
+}
+
 export interface EffectDragData extends BaseDragData {
 	type: "effect";
 	effectType: string;
@@ -40,4 +44,5 @@ export type TimelineDragData =
 	| TextDragData
 	| StickerDragData
 	| GraphicDragData
+	| InstagramQuestionDragData
 	| EffectDragData;

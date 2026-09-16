@@ -2,7 +2,6 @@ import type { ElementType } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import {
-	ArrowRightDoubleIcon,
 	ClosedCaptionIcon,
 	Folder03Icon,
 	Happy01Icon,
@@ -20,7 +19,6 @@ export const TAB_KEYS = [
 	"text",
 	"stickers",
 	"effects",
-	"transitions",
 	"captions",
 	"adjustment",
 	"pronixEditor",
@@ -54,10 +52,6 @@ export const tabs = {
 	effects: {
 		icon: createHugeiconsIcon({ icon: MagicWand05Icon }),
 		label: "Efeitos",
-	},
-	transitions: {
-		icon: createHugeiconsIcon({ icon: ArrowRightDoubleIcon }),
-		label: "Transições",
 	},
 	captions: {
 		icon: createHugeiconsIcon({ icon: ClosedCaptionIcon }),

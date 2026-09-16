@@ -4,6 +4,10 @@ import { STICKER_INTRINSIC_SIZE_FALLBACK } from "@/stickers/intrinsic-size";
 import { DEFAULT_GRAPHIC_SOURCE_SIZE } from "@/graphics";
 import { measureTextElement } from "@/text/measure-element";
 import {
+	buildInstagramQuestionStyleFromParams,
+	measureInstagramQuestionCard,
+} from "@/stickers/instagram-question/card";
+import {
 	getElementLocalTime,
 } from "@/animation";
 import { resolveTransformAtTime } from "@/rendering/animation-values";
@@ -191,6 +195,28 @@ function getElementBounds({
 			canvasWidth,
 			canvasHeight,
 			rect: measured.visualRect,
+			transform,
+		});
+	}
+
+	if (element.type === "instagramQuestion") {
+		const transform = resolveTransformAtTime({
+			baseTransform: buildTransformFromParams({ params: element.params }),
+			animations: element.animations,
+			localTime,
+		});
+
+		const canvas = document.createElement("canvas");
+		const ctx = canvas.getContext("2d");
+		if (!ctx) return null;
+
+		const style = buildInstagramQuestionStyleFromParams({ params: element.params });
+		const measured = measureInstagramQuestionCard({ style, canvasHeight, ctx });
+
+		return getTransformedRectBounds({
+			canvasWidth,
+			canvasHeight,
+			rect: measured.rect,
 			transform,
 		});
 	}

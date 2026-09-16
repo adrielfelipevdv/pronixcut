@@ -3,6 +3,7 @@ import { persist } from "zustand/middleware";
 import { isGuideId, type GuideId } from "@/guides";
 import { DEFAULT_GRID_CONFIG } from "@/guides/grid";
 import type { GridConfig } from "@/guides/types";
+import type { PreviewResolutionScaleSetting } from "./preview-resolution-scale";
 
 type PreviewOverlaysState = Record<string, boolean>;
 
@@ -13,14 +14,23 @@ interface PersistedPreviewState {
 	};
 	overlays?: PreviewOverlaysState;
 	gridConfig?: GridConfig;
+	previewResolutionScale?: PreviewResolutionScaleSetting;
 }
 
 interface PreviewState {
 	activeGuide: GuideId | null;
 	overlays: PreviewOverlaysState;
 	gridConfig: GridConfig;
+	/**
+	 * Editor preference only (like `activeGuide`/`gridConfig` above) — never
+	 * part of the project's saved content. Controls how many pixels the
+	 * Viewer's internal render target uses; never touches
+	 * `project.settings.canvasSize`, media files, or export settings.
+	 */
+	previewResolutionScale: PreviewResolutionScaleSetting;
 	toggleGuide: (guideId: GuideId) => void;
 	setGridConfig: (config: Partial<GridConfig>) => void;
+	setPreviewResolutionScale: (setting: PreviewResolutionScaleSetting) => void;
 	setOverlayVisibility: ({
 		overlayId,
 		isVisible,
@@ -52,6 +62,7 @@ export const usePreviewStore = create<PreviewState>()(
 			activeGuide: null,
 			overlays: DEFAULT_PREVIEW_OVERLAYS,
 			gridConfig: DEFAULT_GRID_CONFIG,
+			previewResolutionScale: "auto",
 			toggleGuide: (guideId) => {
 				set((state) => ({
 					activeGuide: state.activeGuide === guideId ? null : guideId,
@@ -61,6 +72,9 @@ export const usePreviewStore = create<PreviewState>()(
 				set((state) => ({
 					gridConfig: { ...state.gridConfig, ...config },
 				}));
+			},
+			setPreviewResolutionScale: (previewResolutionScale) => {
+				set({ previewResolutionScale });
 			},
 			setOverlayVisibility: ({ overlayId, isVisible }) => {
 				set((state) => ({
@@ -81,7 +95,7 @@ export const usePreviewStore = create<PreviewState>()(
 		}),
 		{
 			name: "preview-settings",
-			version: 6,
+			version: 7,
 			migrate: (persistedState) => {
 				const state = persistedState as PersistedPreviewState | undefined;
 
@@ -92,12 +106,14 @@ export const usePreviewStore = create<PreviewState>()(
 						rows: state?.gridConfig?.rows ?? DEFAULT_GRID_CONFIG.rows,
 						cols: state?.gridConfig?.cols ?? DEFAULT_GRID_CONFIG.cols,
 					},
+					previewResolutionScale: state?.previewResolutionScale ?? "auto",
 				};
 			},
 			partialize: (state) => ({
 				activeGuide: state.activeGuide,
 				overlays: state.overlays,
 				gridConfig: state.gridConfig,
+				previewResolutionScale: state.previewResolutionScale,
 			}),
 		},
 	),

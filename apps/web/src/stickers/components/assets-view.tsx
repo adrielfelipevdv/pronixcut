@@ -25,6 +25,7 @@ import type {
 	StickerItem as StickerData,
 } from "@/stickers";
 import { useStickersStore } from "@/stickers/stickers-store";
+import { InstagramQuestionSection } from "@/stickers/instagram-question/components/library-card";
 import { cn } from "@/utils/ui";
 import {
 	HappyIcon,
@@ -89,6 +90,11 @@ export function StickersView() {
 					))}
 				</TabsList>
 				<div className="min-h-0 flex-1 overflow-y-auto px-4 pt-4">
+					{!searchQuery && selectedCategory === "all" && (
+						<div className="pb-4">
+							<InstagramQuestionSection />
+						</div>
+					)}
 					<StickersContentView />
 				</div>
 			</Tabs>

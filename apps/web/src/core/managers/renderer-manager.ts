@@ -1,10 +1,11 @@
 import type { EditorCore } from "@/core";
 import type { RootNode } from "@/services/renderer/nodes/root-node";
 import type { ExportOptions, ExportResult } from "@/export";
+import { resolveExportSettings, resolveVideoBitrate } from "@/export/resolve";
 import { CanvasRenderer } from "@/services/renderer/canvas-renderer";
 import { SceneExporter } from "@/services/renderer/scene-exporter";
 import { buildScene } from "@/services/renderer/scene-builder";
-import { createTimelineAudioBuffer } from "@/media/audio";
+import { createTimelineAudioBuffer, downmixAudioBufferToMono } from "@/media/audio";
 import { formatTimecode } from "opencut-wasm";
 import { frameRateToFloat } from "@/fps/utils";
 import { downloadBlob } from "@/utils/browser";
@@ -192,7 +193,7 @@ export class RendererManager {
 		onProgress?: ({ progress }: { progress: number }) => void;
 		onCancel?: () => boolean;
 	}): Promise<ExportResult> {
-		const { format, quality, fps, includeAudio } = options;
+		const includeAudio = options.audio.include;
 
 		try {
 			const tracks = this.editor.scenes.getActiveScene().tracks;
@@ -208,8 +209,12 @@ export class RendererManager {
 				return { success: false, error: "Project is empty" };
 			}
 
-			const exportFps = fps ?? activeProject.settings.fps;
-			const canvasSize = activeProject.settings.canvasSize;
+			const resolved = resolveExportSettings({
+				options,
+				projectSize: activeProject.settings.canvasSize,
+				projectFps: activeProject.settings.fps,
+			});
+			const videoBitrate = resolveVideoBitrate({ options, resolved });
 
 			let audioBuffer: AudioBuffer | null = null;
 			if (includeAudio) {
@@ -218,25 +223,37 @@ export class RendererManager {
 					tracks,
 					mediaAssets,
 					duration,
+					sampleRate: options.audio.sampleRate,
 				});
+				if (audioBuffer && options.audio.channels === 1) {
+					audioBuffer = downmixAudioBufferToMono({ buffer: audioBuffer });
+				}
 			}
 
+			// canvasSize/background still drive scene composition at the
+			// project's own coordinate space — the export CanvasRenderer below
+			// is what actually resizes the output to `resolved` width/height.
 			const scene = buildScene({
 				tracks,
 				mediaAssets,
 				duration,
-				canvasSize,
+				canvasSize: activeProject.settings.canvasSize,
 				background: activeProject.settings.background,
 			});
 
 			const exporter = new SceneExporter({
-				width: canvasSize.width,
-				height: canvasSize.height,
-				fps: exportFps,
-				format,
-				quality,
+				width: resolved.width,
+				height: resolved.height,
+				fps: resolved.fps,
+				container: options.container,
+				videoCodec: options.codec,
+				videoBitrate,
+				bitrateMode: options.bitrateMode,
+				hardwareAcceleration: options.hardwareAcceleration,
 				shouldIncludeAudio: !!includeAudio,
 				audioBuffer: audioBuffer || undefined,
+				audioCodec: options.audio.codec,
+				audioBitrate: options.audio.bitrate,
 			});
 
 			exporter.on("progress", (progress) => {

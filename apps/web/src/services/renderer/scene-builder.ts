@@ -6,6 +6,7 @@ import { ImageNode } from "./nodes/image-node";
 import { TextNode } from "./nodes/text-node";
 import { StickerNode } from "./nodes/sticker-node";
 import { GraphicNode } from "./nodes/graphic-node";
+import { InstagramQuestionNode } from "./nodes/instagram-question-node";
 import { ColorNode } from "./nodes/color-node";
 import { BlurBackgroundNode } from "./nodes/blur-background-node";
 import { EffectLayerNode } from "./nodes/effect-layer-node";
@@ -156,6 +157,19 @@ function buildTrackNodes({
 						blendMode: readBlendModeFromParams({ params: element.params }),
 						effects: element.effects ?? [],
 						masks: element.masks ?? [],
+					}),
+				);
+			}
+
+			if (element.type === "instagramQuestion") {
+				nodes.push(
+					new InstagramQuestionNode({
+						...element,
+						transform: buildTransformFromParams({ params: element.params }),
+						opacity: readOpacityFromParams({ params: element.params }),
+						blendMode: readBlendModeFromParams({ params: element.params }),
+						canvasCenter: { x: canvasSize.width / 2, y: canvasSize.height / 2 },
+						canvasHeight: canvasSize.height,
 					}),
 				);
 			}

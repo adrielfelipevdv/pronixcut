@@ -4,6 +4,11 @@ import {
 	readColorGradeValues,
 	type ColorGradeValues,
 } from "./params";
+import {
+	applyAdvancedGpuPass,
+	isAdvancedGradeNeutral,
+	readAdvancedGradeInputs,
+} from "./webgl/grade-pass";
 
 // Real, native-canvas image processing — no per-pixel JS loops (keeps this
 // safe to run every playback frame). `filter` contributes to ONE combined
@@ -117,18 +122,26 @@ function drawVignetteOverlay({
 	width,
 	height,
 	vignette,
+	vignetteSize,
+	vignetteFeather,
 }: {
 	ctx: Canvas2DEffectContext;
 	width: number;
 	height: number;
 	vignette: number;
+	vignetteSize: number;
+	vignetteFeather: number;
 }): void {
 	if (vignette <= 0) return;
 	const strength = Math.min(1, vignette / 100);
+	const size = Math.min(1, Math.max(0, vignetteSize / 100));
+	const feather = Math.min(1, Math.max(0, vignetteFeather / 100));
 	const cx = width / 2;
 	const cy = height / 2;
-	const innerRadius = Math.min(width, height) * (0.35 - strength * 0.1);
-	const outerRadius = Math.max(width, height) * (0.75 - strength * 0.15);
+	// `size` pushes the clear center outward, `feather` widens the gradient
+	// band between the clear center and the fully-darkened edge.
+	const innerRadius = Math.min(width, height) * (0.15 + size * 0.55);
+	const outerRadius = innerRadius + Math.max(width, height) * (0.15 + feather * 0.6);
 	const gradient = ctx.createRadialGradient(cx, cy, Math.max(0, innerRadius), cx, cy, outerRadius);
 	gradient.addColorStop(0, "rgba(0,0,0,0)");
 	gradient.addColorStop(1, `rgba(0,0,0,${(0.15 + strength * 0.6).toFixed(3)})`);
@@ -139,21 +152,26 @@ function drawVignetteOverlay({
 	ctx.restore();
 }
 
-// Grain needs actual noise, but generating it is a one-time cost — the
-// pattern is built once per size and reused as a tiled fill on every draw
-// afterwards, so applying it costs one canvas fillRect, not a per-pixel loop.
+// Grain needs actual noise, but generating it is a one-time cost per
+// (pixelSize, softness) bucket — the pattern is built once and reused as a
+// tiled fill on every draw afterwards, so applying it costs one canvas
+// fillRect (+ a native blur for "softness"), not a per-pixel loop.
 const grainPatternCache = new Map<string, OffscreenCanvas>();
 
-function getGrainTile(): OffscreenCanvas {
-	const key = "grain-tile";
+function getGrainTile({ size, softness }: { size: number; softness: number }): OffscreenCanvas {
+	// Bucket to whole pixels / 5%-steps so a dragged slider doesn't regenerate
+	// noise on every intermediate value.
+	const pixelSize = Math.round(size);
+	const softBucket = Math.round(softness * 20) / 20;
+	const key = `${pixelSize}:${softBucket}`;
 	const cached = grainPatternCache.get(key);
 	if (cached) return cached;
 
-	const size = 128;
-	const tile = new OffscreenCanvas(size, size);
-	const tileCtx = tile.getContext("2d");
-	if (tileCtx) {
-		const imageData = tileCtx.createImageData(size, size);
+	const tileSize = 128;
+	const raw = new OffscreenCanvas(tileSize, tileSize);
+	const rawCtx = raw.getContext("2d");
+	if (rawCtx) {
+		const imageData = rawCtx.createImageData(tileSize, tileSize);
 		for (let i = 0; i < imageData.data.length; i += 4) {
 			const value = Math.floor(Math.random() * 255);
 			imageData.data[i] = value;
@@ -161,7 +179,26 @@ function getGrainTile(): OffscreenCanvas {
 			imageData.data[i + 2] = value;
 			imageData.data[i + 3] = 255;
 		}
-		tileCtx.putImageData(imageData, 0, 0);
+		rawCtx.putImageData(imageData, 0, 0);
+	}
+
+	// pixelSize scales the grain's apparent size (nearest-neighbor upscale of
+	// a smaller noise field keeps blocky "large grain" chunky rather than
+	// just blurring it), softness then blurs that result.
+	const grainPx = Math.max(1, Math.round(pixelSize / 24));
+	const smallSize = Math.max(4, Math.round(tileSize / grainPx));
+	const upscaled = new OffscreenCanvas(tileSize, tileSize);
+	const upscaledCtx = upscaled.getContext("2d");
+	if (upscaledCtx) {
+		upscaledCtx.imageSmoothingEnabled = false;
+		upscaledCtx.drawImage(raw, 0, 0, smallSize, smallSize, 0, 0, tileSize, tileSize);
+	}
+
+	const tile = new OffscreenCanvas(tileSize, tileSize);
+	const tileCtx = tile.getContext("2d");
+	if (tileCtx) {
+		tileCtx.filter = softBucket > 0 ? `blur(${(softBucket * 2).toFixed(2)}px)` : "none";
+		tileCtx.drawImage(upscaled, 0, 0);
 	}
 	grainPatternCache.set(key, tile);
 	return tile;
@@ -172,14 +209,18 @@ function drawGrainOverlay({
 	width,
 	height,
 	grain,
+	grainSize,
+	grainSoftness,
 }: {
 	ctx: Canvas2DEffectContext;
 	width: number;
 	height: number;
 	grain: number;
+	grainSize: number;
+	grainSoftness: number;
 }): void {
 	if (grain <= 0) return;
-	const tile = getGrainTile();
+	const tile = getGrainTile({ size: grainSize, softness: Math.min(1, Math.max(0, grainSoftness / 100)) });
 	const pattern = ctx.createPattern(tile, "repeat");
 	if (!pattern) return;
 	ctx.save();
@@ -203,12 +244,41 @@ export function drawColorGradeOverlay({
 }): void {
 	const v: ColorGradeValues = applyIntensity(readColorGradeValues(effectParams));
 
+	// Order documented in adjustments/README.md: básico/avançado tonal
+	// (native canvas composite ops, below) -> GPU pass (detail/HSL
+	// seletivo/curvas/LUT — genuinely needs per-pixel or neighborhood math)
+	// -> vignette/grain finishing touches, last.
 	drawToneOverlay({ ctx, width, height, amount: v.shadows });
 	drawToneOverlay({ ctx, width, height, amount: v.highlights });
 	drawToneOverlay({ ctx, width, height, amount: v.blacks, maxOpacity: 0.45 });
 	drawToneOverlay({ ctx, width, height, amount: v.whites, maxOpacity: 0.45 });
 	drawTemperatureOverlay({ ctx, width, height, temperature: v.temperature });
 	drawFadeOverlay({ ctx, width, height, fade: v.fade });
-	drawVignetteOverlay({ ctx, width, height, vignette: v.vignette });
-	drawGrainOverlay({ ctx, width, height, grain: v.grain });
+
+	const advancedInputs = readAdvancedGradeInputs(effectParams, {
+		sharpness: v.sharpness,
+		clarity: v.clarity,
+		noiseReduction: v.noiseReduction,
+		lutIntensity: v.lutIntensity,
+	});
+	if (!isAdvancedGradeNeutral(advancedInputs)) {
+		applyAdvancedGpuPass({ ctx, width, height, inputs: advancedInputs });
+	}
+
+	drawVignetteOverlay({
+		ctx,
+		width,
+		height,
+		vignette: v.vignette,
+		vignetteSize: v.vignetteSize,
+		vignetteFeather: v.vignetteFeather,
+	});
+	drawGrainOverlay({
+		ctx,
+		width,
+		height,
+		grain: v.grain,
+		grainSize: v.grainSize,
+		grainSoftness: v.grainSoftness,
+	});
 }

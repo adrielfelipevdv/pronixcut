@@ -17,6 +17,19 @@ pub(crate) struct GpuRuntime {
 
 thread_local! {
     static GPU_RUNTIME: RefCell<Option<GpuRuntime>> = const { RefCell::new(None) };
+    // A second, fully independent GPU context (own instance/adapter/device, and
+    // on the WebGL fallback its own dedicated canvas) used exclusively for
+    // one-off "render this to an offscreen canvas and hand back the pixels"
+    // calls (effect/blur preview thumbnails, mask feather). Those calls used
+    // to run through GPU_RUNTIME and, on WebGL, briefly resized and painted
+    // into the SAME canvas the compositor has mounted as the live editor
+    // preview (see render_texture_to_gl_canvas_surface's comment) before
+    // copying the pixels out — a real bug, not just a visual one: the
+    // compositor's canvas would visibly flash/stick on whatever the preview
+    // thumbnail last rendered until the compositor happened to draw a new
+    // frame. Keeping preview rendering on its own runtime makes that
+    // structurally impossible instead of papering over it.
+    static PREVIEW_GPU_RUNTIME: RefCell<Option<GpuRuntime>> = const { RefCell::new(None) };
 }
 
 fn set_panic_hook() {
@@ -70,6 +83,49 @@ pub(crate) fn with_gpu_runtime<T>(
         let Some(gpu_runtime) = borrow.as_ref() else {
             return Err(JsValue::from_str(
                 "GPU context not initialized. Call initializeGpu() first.",
+            ));
+        };
+        action(gpu_runtime)
+    })
+}
+
+/// Initializes the independent GPU context used only for preview-thumbnail
+/// rendering (effect cards, blur presets, mask feather previews). Must be
+/// awaited once before `applyEffectPasses`/`applyMaskFeather` are called; safe
+/// to call more than once (a no-op after the first successful call).
+#[wasm_bindgen(js_name = initializePreviewGpu)]
+pub async fn initialize_preview_gpu() -> Result<(), JsValue> {
+    set_panic_hook();
+
+    if PREVIEW_GPU_RUNTIME.with(|runtime| runtime.borrow().is_some()) {
+        return Ok(());
+    }
+
+    let context = GpuContext::new()
+        .await
+        .map_err(|error| JsValue::from_str(&error.to_string()))?;
+    let effects = EffectPipeline::new(&context);
+    let masks = MaskFeatherPipeline::new(&context);
+
+    PREVIEW_GPU_RUNTIME.with(|runtime| {
+        runtime.replace(Some(GpuRuntime {
+            context,
+            effects,
+            masks,
+        }));
+    });
+
+    Ok(())
+}
+
+pub(crate) fn with_preview_gpu_runtime<T>(
+    action: impl FnOnce(&GpuRuntime) -> Result<T, JsValue>,
+) -> Result<T, JsValue> {
+    PREVIEW_GPU_RUNTIME.with(|runtime| {
+        let borrow = runtime.borrow();
+        let Some(gpu_runtime) = borrow.as_ref() else {
+            return Err(JsValue::from_str(
+                "Preview GPU context not initialized. Call initializePreviewGpu() first.",
             ));
         };
         action(gpu_runtime)

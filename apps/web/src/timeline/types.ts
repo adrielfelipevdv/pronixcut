@@ -54,7 +54,7 @@ export interface AudioTrack extends BaseTrack {
 
 export interface GraphicTrack extends BaseTrack {
 	type: "graphic";
-	elements: (StickerElement | GraphicElement)[];
+	elements: (StickerElement | GraphicElement | InstagramQuestionElement)[];
 	hidden: boolean;
 }
 
@@ -132,10 +132,19 @@ export interface ImageElement extends BaseTimelineElement {
 	masks?: Mask[];
 }
 
+export interface TextWordTiming {
+	text: string;
+	/** Local time relative to the element's own start (same origin as `startTime`/`duration`). */
+	start: number;
+	end: number;
+}
+
 export interface TextElement extends BaseTimelineElement {
 	type: "text";
 	hidden?: boolean;
 	effects?: Effect[];
+	/** Per-word timings for word-highlighted captions ("Títulos virais"). Only meaningful when `params["wordHighlight.enabled"]` is true; absent on plain text/captions. */
+	words?: TextWordTiming[];
 }
 
 export interface StickerElement extends BaseTimelineElement {
@@ -161,6 +170,17 @@ export interface EffectElement extends BaseTimelineElement {
 	effectType: string;
 }
 
+/** "Caixinha de perguntas" — an Instagram-style question sticker: a rounded
+ * card with a dark header line and a white question block below it. Header
+ * and question text/colors/sizes all live in `params` (see
+ * params/registry.ts's instagramQuestionElementParams) — this interface only
+ * carries the type discriminant plus the fields every visual element needs. */
+export interface InstagramQuestionElement extends BaseTimelineElement {
+	type: "instagramQuestion";
+	hidden?: boolean;
+	effects?: Effect[];
+}
+
 export type ElementUpdatePatch = { params?: Partial<ParamValues> };
 
 export type TimelineElement =
@@ -170,6 +190,7 @@ export type TimelineElement =
 	| TextElement
 	| StickerElement
 	| GraphicElement
+	| InstagramQuestionElement
 	| EffectElement;
 
 export type ElementType = TimelineElement["type"];
@@ -198,6 +219,7 @@ export const VISUAL_ELEMENT_TYPES = elementTypes(
 	"text",
 	"sticker",
 	"graphic",
+	"instagramQuestion",
 );
 
 export type VisualElement = Extract<
@@ -215,6 +237,7 @@ export type CreateImageElement = Omit<ImageElement, "id">;
 export type CreateTextElement = Omit<TextElement, "id">;
 export type CreateStickerElement = Omit<StickerElement, "id">;
 export type CreateGraphicElement = Omit<GraphicElement, "id">;
+export type CreateInstagramQuestionElement = Omit<InstagramQuestionElement, "id">;
 export type CreateEffectElement = Omit<EffectElement, "id">;
 export type CreateTimelineElement =
 	| CreateAudioElement
@@ -223,6 +246,7 @@ export type CreateTimelineElement =
 	| CreateTextElement
 	| CreateStickerElement
 	| CreateGraphicElement
+	| CreateInstagramQuestionElement
 	| CreateEffectElement;
 
 export interface ElementDragState {

@@ -25,6 +25,8 @@ import {
 } from "./preview-viewport";
 import { SidePreviewPane } from "./side-preview";
 import { useSidePreviewStore } from "@/preview/side-preview-store";
+import { usePreviewStore } from "@/preview/preview-store";
+import { resolveEffectivePreviewResolution } from "@/preview/preview-resolution-scale";
 
 function usePreviewSize() {
 	const canvasSize = useEditor(
@@ -35,6 +37,45 @@ function usePreviewSize() {
 		width: canvasSize?.width,
 		height: canvasSize?.height,
 	};
+}
+
+/**
+ * "Qualidade da pré-visualização" — an editor preference (never project
+ * content), independently persisted in `usePreviewStore`. Resolves to a
+ * physical render-target size for the Viewer's compositor/effects pipeline
+ * ONLY — `project.settings.canvasSize` (aspect ratio, coordinate space every
+ * element's params are authored against) is never touched, and this value
+ * never reaches export (SceneExporter/renderer-manager build their own
+ * CanvasRenderer at export-resolved size, entirely independent of this
+ * store). See preview-resolution-scale.ts for the scale rules and
+ * canvas-renderer.ts's `coordinateScale` for how absolute-pixel values
+ * (position, mask feather, text stroke) stay correctly proportioned on the
+ * smaller target.
+ */
+function usePreviewResolutionScale({
+	nativeWidth,
+	nativeHeight,
+}: {
+	nativeWidth?: number;
+	nativeHeight?: number;
+}) {
+	const setting = usePreviewStore((s) => s.previewResolutionScale);
+
+	return useMemo(() => {
+		if (!nativeWidth || !nativeHeight) {
+			return { scale: 1, indicatorLabel: null, width: nativeWidth, height: nativeHeight };
+		}
+		const { scale, indicatorLabel } = resolveEffectivePreviewResolution({
+			setting,
+			canvasSize: { width: nativeWidth, height: nativeHeight },
+		});
+		return {
+			scale,
+			indicatorLabel,
+			width: Math.max(1, Math.round(nativeWidth * scale)),
+			height: Math.max(1, Math.round(nativeHeight * scale)),
+		};
+	}, [setting, nativeWidth, nativeHeight]);
 }
 
 function normalizeWheelDelta({
@@ -127,6 +168,19 @@ function AspectRatioBadge({
 	);
 }
 
+function PreviewQualityBadge({ label }: { label: string | null }) {
+	if (!label) return null;
+
+	return (
+		<div
+			className="bg-elevated/90 border-border text-muted-foreground pointer-events-none absolute top-11 left-3 z-10 flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-medium backdrop-blur-sm"
+			title={`Qualidade da pré-visualização: ${label}`}
+		>
+			{label}
+		</div>
+	);
+}
+
 function RenderTreeController() {
 	const editor = useEditor();
 	const tracks = useEditor(
@@ -136,22 +190,34 @@ function RenderTreeController() {
 	const activeProject = useEditor((e) => e.project.getActive());
 
 	const { width, height } = usePreviewSize();
+	const { width: renderWidth, height: renderHeight } = usePreviewResolutionScale({
+		nativeWidth: width,
+		nativeHeight: height,
+	});
 
 	useDeepCompareEffect(() => {
-		if (!activeProject) return;
+		if (!activeProject || renderWidth === undefined || renderHeight === undefined) {
+			return;
+		}
 
 		const duration = editor.timeline.getTotalDuration();
 		const renderTree = buildScene({
 			tracks,
 			mediaAssets,
 			duration,
-			canvasSize: { width, height },
+			canvasSize: { width: renderWidth, height: renderHeight },
 			background: activeProject.settings.background,
 			isPreview: true,
 		});
 
 		editor.renderer.setRenderTree({ renderTree });
-	}, [tracks, mediaAssets, activeProject?.settings.background, width, height]);
+	}, [
+		tracks,
+		mediaAssets,
+		activeProject?.settings.background,
+		renderWidth,
+		renderHeight,
+	]);
 
 	return null;
 }
@@ -178,10 +244,21 @@ function PreviewCanvas({
 	const lastSceneRef = useRef<RootNode | null>(null);
 	const renderingRef = useRef(false);
 	const { width: nativeWidth, height: nativeHeight } = usePreviewSize();
+	const {
+		scale: previewScale,
+		indicatorLabel: previewQualityIndicator,
+		width: renderWidth,
+		height: renderHeight,
+	} = usePreviewResolutionScale({ nativeWidth, nativeHeight });
 	const viewportSize = useContainerSize({ containerRef: viewportRef });
 	const editor = useEditor();
 	const activeProject = useEditor((e) => e.project.getActive());
 	const renderTree = useEditor((e) => e.renderer.getRenderTree());
+	// Viewport/CSS sizing and pointer↔canvas conversion (drag handles, zoom,
+	// pan) always use the project's real canvasSize (`nativeWidth/Height`) —
+	// never the reduced preview render size — so the Viewer's on-screen
+	// footprint and every drag/handle computation stay exactly the same
+	// regardless of "Qualidade da pré-visualização".
 	const viewport = usePreviewViewportState({
 		canvasHeight: nativeHeight,
 		canvasWidth: nativeWidth,
@@ -193,11 +270,12 @@ function PreviewCanvas({
 
 	const renderer = useMemo(() => {
 		return new CanvasRenderer({
-			width: nativeWidth,
-			height: nativeHeight,
+			width: renderWidth ?? nativeWidth,
+			height: renderHeight ?? nativeHeight,
 			fps: activeProject.settings.fps,
+			coordinateScale: previewScale,
 		});
-	}, [nativeWidth, nativeHeight, activeProject.settings.fps]);
+	}, [renderWidth, renderHeight, nativeWidth, nativeHeight, activeProject.settings.fps, previewScale]);
 
 	// Mount the compositor's output canvas directly into the preview. wgpu
 	// renders straight into this element, so there is no intermediate copy —
@@ -355,6 +433,7 @@ function PreviewCanvas({
 				<div className="relative flex min-h-0 min-w-0 flex-1 gap-2 p-2 pb-0">
 					<div className="relative flex min-h-0 min-w-0 flex-1">
 					<AspectRatioBadge width={nativeWidth} height={nativeHeight} />
+					<PreviewQualityBadge label={previewQualityIndicator} />
 					<ContextMenu>
 						<ContextMenuTrigger asChild>
 							<div

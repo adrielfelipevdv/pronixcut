@@ -14,6 +14,22 @@ export type CanvasRendererParams = {
 	width: number;
 	height: number;
 	fps: FrameRate;
+	/**
+	 * Ratio between this renderer's actual pixel dimensions and the project's
+	 * authored canvas resolution (`project.settings.canvasSize`) — 1 when
+	 * they match (export, thumbnails, and full-quality preview all pass this
+	 * implicitly by omitting it). When the live Viewer renders at a reduced
+	 * "Qualidade da pré-visualização" (see preview-resolution-scale.ts),
+	 * `width`/`height` here are already the smaller physical target, but
+	 * absolute-pixel values authored against the full project resolution
+	 * (element position, mask feather, text stroke width — anything that
+	 * isn't already expressed as a ratio against canvas size) need to be
+	 * multiplied by this factor wherever they're combined with
+	 * `renderer.width`/`renderer.height`, or they'd end up in the wrong
+	 * place/proportion on the smaller target. See resolve.ts and
+	 * compositor/frame-descriptor.ts for the actual application sites.
+	 */
+	coordinateScale?: number;
 };
 
 export class CanvasRenderer {
@@ -22,11 +38,13 @@ export class CanvasRenderer {
 	width: number;
 	height: number;
 	fps: FrameRate;
+	coordinateScale: number;
 
-	constructor({ width, height, fps }: CanvasRendererParams) {
+	constructor({ width, height, fps, coordinateScale = 1 }: CanvasRendererParams) {
 		this.width = width;
 		this.height = height;
 		this.fps = fps;
+		this.coordinateScale = coordinateScale;
 
 		const surface = createCanvasSurface({ width, height });
 		this.canvas = surface.canvas;
@@ -41,9 +59,18 @@ export class CanvasRenderer {
 		return wasmCompositor.getCanvas();
 	}
 
-	setSize({ width, height }: { width: number; height: number }) {
+	setSize({
+		width,
+		height,
+		coordinateScale = 1,
+	}: {
+		width: number;
+		height: number;
+		coordinateScale?: number;
+	}) {
 		this.width = width;
 		this.height = height;
+		this.coordinateScale = coordinateScale;
 
 		const surface = createCanvasSurface({ width, height });
 		this.canvas = surface.canvas;

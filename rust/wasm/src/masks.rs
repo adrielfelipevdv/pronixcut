@@ -6,7 +6,7 @@ use wasm_bindgen::{JsCast, JsValue, prelude::wasm_bindgen};
 
 use crate::gpu::{
     import_canvas_texture, read_f32_property, read_offscreen_canvas_property, read_u32_property,
-    render_texture_to_canvas, with_gpu_runtime,
+    render_texture_to_canvas, with_preview_gpu_runtime,
 };
 
 struct ApplyMaskFeatherOptions {
@@ -25,7 +25,7 @@ pub fn apply_mask_feather(options: JsValue) -> Result<wgpu::web_sys::OffscreenCa
         feather,
     } = parse_apply_mask_feather_options(options)?;
 
-    with_gpu_runtime(|runtime| {
+    with_preview_gpu_runtime(|runtime| {
         let mask_texture = import_canvas_texture(
             &runtime.context,
             &mask,

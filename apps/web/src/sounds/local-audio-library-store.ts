@@ -50,20 +50,28 @@ export const useLocalAudioLibraryStore = create<LocalAudioLibraryStore>((set, ge
 		set({ isImporting: true });
 		try {
 			for (const file of files) {
-				const formData = new FormData();
-				formData.append("file", file);
-				const response = await fetch("/api/media-library/audio", {
-					method: "POST",
-					body: formData,
-				});
-				const data = await response.json();
-				if (!response.ok) {
-					toast.error(`Falha ao importar "${file.name}"`, {
-						description: data.error,
+				try {
+					const formData = new FormData();
+					formData.append("file", file);
+					const response = await fetch("/api/media-library/audio", {
+						method: "POST",
+						body: formData,
 					});
-					continue;
+					const data = await response.json();
+					if (!response.ok) {
+						toast.error(`Falha ao importar "${file.name}"`, {
+							description: data.error,
+						});
+						continue;
+					}
+					set((state) => ({ items: [data.item, ...state.items] }));
+				} catch (error) {
+					console.error("Failed to import library audio:", error);
+					toast.error(`Falha ao importar "${file.name}"`, {
+						description:
+							error instanceof Error ? error.message : "Erro desconhecido",
+					});
 				}
-				set((state) => ({ items: [data.item, ...state.items] }));
 			}
 		} finally {
 			set({ isImporting: false });

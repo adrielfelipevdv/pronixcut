@@ -44,6 +44,14 @@ export {
 } from "./curve-bridge";
 
 export {
+	EASING_PRESETS,
+	EASING_PRESET_OPTIONS,
+	buildEasingCurvePatches,
+	getEasingPresetForSegment,
+	type EasingPresetId,
+} from "./easing-presets";
+
+export {
 	buildGraphicParamPath,
 	isGraphicParamPath,
 	parseGraphicParamPath,

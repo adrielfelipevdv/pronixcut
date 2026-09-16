@@ -138,6 +138,14 @@ export const ACTIONS = {
 		description: "Refazer",
 		category: "history",
 	},
+	"save-project": {
+		description: "Salvar projeto",
+		category: "controls",
+	},
+	"save-project-as": {
+		description: "Salvar projeto como...",
+		category: "controls",
+	},
 	"remove-media-asset": {
 		description: "Remover arquivo de mídia",
 		category: "assets",
@@ -174,6 +182,8 @@ const ACTION_DEFAULT_SHORTCUTS = [
 	["duplicate-selected", ["ctrl+d"]],
 	["undo", ["ctrl+z"]],
 	["redo", ["ctrl+shift+z", "ctrl+y"]],
+	["save-project", ["ctrl+s"]],
+	["save-project-as", ["ctrl+shift+s"]],
 ] as const satisfies ReadonlyArray<
 	readonly [TActionWithOptionalArgs, readonly ShortcutKey[]]
 >;

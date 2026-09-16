@@ -8,6 +8,13 @@ export interface Transform {
 		y: number;
 	};
 	rotate: number;
+	/** Normalized 0..1 pivot within the element's own bounds (0.5,0.5 = center, the pre-existing default/behavior). Rotation and scale pivot around this point instead of the geometric center. */
+	anchor: {
+		x: number;
+		y: number;
+	};
+	flipHorizontal: boolean;
+	flipVertical: boolean;
 }
 
 export type BlendMode =
@@ -42,6 +49,20 @@ export function buildTransformFromParams({
 			y: readNumberParam({ params, key: "transform.positionY", fallback: 0 }),
 		},
 		rotate: readNumberParam({ params, key: "transform.rotate", fallback: 0 }),
+		anchor: {
+			x: readNumberParam({ params, key: "transform.anchorX", fallback: 0.5 }),
+			y: readNumberParam({ params, key: "transform.anchorY", fallback: 0.5 }),
+		},
+		flipHorizontal: readBooleanParam({
+			params,
+			key: "transform.flipHorizontal",
+			fallback: false,
+		}),
+		flipVertical: readBooleanParam({
+			params,
+			key: "transform.flipVertical",
+			fallback: false,
+		}),
 	};
 }
 
@@ -73,6 +94,19 @@ function readNumberParam({
 }): number {
 	const value = params[key];
 	return typeof value === "number" ? value : fallback;
+}
+
+function readBooleanParam({
+	params,
+	key,
+	fallback,
+}: {
+	params: ParamValues;
+	key: string;
+	fallback: boolean;
+}): boolean {
+	const value = params[key];
+	return typeof value === "boolean" ? value : fallback;
 }
 
 function isBlendMode(value: string): value is BlendMode {

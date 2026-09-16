@@ -208,19 +208,39 @@ export function SectionFields({
 export function SectionField({
 	label,
 	beforeLabel,
+	trailing,
 	children,
 	className,
+	layout = "stack",
 }: {
 	label: string;
 	beforeLabel?: React.ReactNode;
+	trailing?: React.ReactNode;
 	children: React.ReactNode;
 	className?: string;
+	layout?: "stack" | "row";
 }) {
+	if (layout === "row") {
+		return (
+			<div className={cn("flex min-h-7 items-center gap-3", className)}>
+				<div className="flex min-w-0 flex-1 items-center gap-1.5">
+					{beforeLabel}
+					<Label className="truncate">{label}</Label>
+					{trailing}
+				</div>
+				<div className="flex w-[58%] shrink-0 items-center justify-end gap-1.5">
+					{children}
+				</div>
+			</div>
+		);
+	}
+
 	return (
 		<div className={cn("flex flex-col gap-2", className)}>
 			<div className="flex h-4 items-center gap-1.5">
 				{beforeLabel}
 				<Label>{label}</Label>
+				{trailing}
 			</div>
 			{children}
 		</div>

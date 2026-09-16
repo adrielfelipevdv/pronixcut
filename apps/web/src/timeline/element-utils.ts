@@ -9,6 +9,7 @@ import {
 	type CreateVideoElement,
 	type CreateImageElement,
 	type CreateStickerElement,
+	type CreateInstagramQuestionElement,
 	type CreateUploadAudioElement,
 	type CreateLibraryAudioElement,
 	type TextElement,
@@ -199,6 +200,29 @@ export function buildGraphicElement({
 		startTime,
 		trimStart: ZERO_MEDIA_TIME,
 		trimEnd: ZERO_MEDIA_TIME,
+	};
+}
+
+export function buildInstagramQuestionElement({
+	name,
+	startTime,
+	params,
+}: {
+	name?: string;
+	startTime: MediaTime;
+	params?: Partial<ParamValues>;
+}): CreateInstagramQuestionElement {
+	return {
+		type: "instagramQuestion",
+		name: name ?? "Caixinha de perguntas",
+		duration: DEFAULT_NEW_ELEMENT_DURATION,
+		startTime,
+		trimStart: ZERO_MEDIA_TIME,
+		trimEnd: ZERO_MEDIA_TIME,
+		params: mergeParamValues({
+			base: buildDefaultElementParams({ type: "instagramQuestion" }),
+			overrides: params,
+		}),
 	};
 }
 

@@ -12,6 +12,13 @@ export function hexToHsv({ hex }: { hex: string }): [number, number, number] {
 	return [color.h ?? 0, color.s ?? 0, color.v ?? 0];
 }
 
+/** Normalized (0..1) linear-space-agnostic sRGB components, for feeding a color param straight into a GPU shader uniform. Accepts a hex string with or without a leading "#". */
+export function hexToRgb01({ hex }: { hex: string }): [number, number, number] {
+	const color = toRgb(hex.startsWith("#") ? hex : `#${hex}`);
+	if (!color) return [0, 0, 0];
+	return [color.r ?? 0, color.g ?? 0, color.b ?? 0];
+}
+
 export function hsvToHex({
 	h,
 	s,

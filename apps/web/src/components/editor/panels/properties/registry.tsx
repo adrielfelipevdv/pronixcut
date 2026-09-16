@@ -3,6 +3,7 @@ import type {
 	EffectElement,
 	GraphicElement,
 	ImageElement,
+	InstagramQuestionElement,
 	MaskableElement,
 	RetimableElement,
 	StickerElement,
@@ -21,9 +22,12 @@ import {
 	MusicNote03Icon,
 	MagicWand05Icon,
 	DashboardSpeed02Icon,
+	SparklesIcon,
+	MessageQuestionIcon,
 } from "@hugeicons/core-free-icons";
 import { ElementParamsTab } from "./components/element-params-tab";
 import { FadeControls } from "./components/fade-controls";
+import { TransformFields } from "./components/transform-fields";
 import { VOLUME_DB_MIN } from "@/timeline/audio-constants";
 import { ClipEffectsTab, StandaloneEffectTab } from "@/effects/components/effects-tab";
 import { MasksTab } from "@/masks/components/masks-tab";
@@ -31,17 +35,15 @@ import { SpeedTab } from "@/speed/components/speed-tab";
 import { GraphicTab } from "@/graphics/components/graphic-tab";
 import { OcShapesIcon } from "@/components/icons";
 import { SaveTextPresetButton } from "@/text/components/save-text-preset-button";
-
-const TRANSFORM_PARAM_KEYS = [
-	"transform.positionX",
-	"transform.positionY",
-	"transform.scaleX",
-	"transform.scaleY",
-	"transform.rotate",
-] as const;
+import { LoadTextPresetButton } from "@/text/components/load-text-preset-button";
 
 const BLENDING_PARAM_KEYS = ["opacity", "blendMode"] as const;
 const AUDIO_PARAM_KEYS = ["volume", "muted"] as const;
+
+// The full set of style fields a text preset can save/apply — kept as one
+// list independent of how the Inspector groups them into tabs (see
+// text-preset-apply.ts). Do not remove keys from here without checking that
+// consumer first.
 export const TEXT_PARAM_KEYS = [
 	"content",
 	"fontFamily",
@@ -60,6 +62,58 @@ export const TEXT_PARAM_KEYS = [
 	"background.paddingY",
 	"background.offsetX",
 	"background.offsetY",
+] as const;
+
+// "Texto" tab: just the content + core typography a caption/text box needs
+// to read at a glance. Everything more stylistic lives in "Estilo".
+const TEXT_CORE_PARAM_KEYS = [
+	"content",
+	"fontFamily",
+	"fontWeight",
+	"fontSize",
+	"color",
+	"textAlign",
+	"letterSpacing",
+	"lineHeight",
+] as const;
+
+// "Estilo" tab: decoration, background/fill and blending — the "how it's
+// dressed" half of TEXT_PARAM_KEYS, plus the same opacity/blendMode fields
+// every other visual element gets in its blending tab.
+const TEXT_STYLE_PARAM_KEYS = [
+	"fontStyle",
+	"textDecoration",
+	"background.enabled",
+	"background.color",
+	"background.cornerRadius",
+	"background.paddingX",
+	"background.paddingY",
+	"background.offsetX",
+	"background.offsetY",
+	...BLENDING_PARAM_KEYS,
+] as const;
+
+const INSTAGRAM_QUESTION_CONTENT_PARAM_KEYS = [
+	"header.content",
+	"question.content",
+] as const;
+
+const INSTAGRAM_QUESTION_STYLE_PARAM_KEYS = [
+	"fontFamily",
+	"question.fontWeight",
+	"question.fontSize",
+	"header.fontSize",
+	"card.headerColor",
+	"card.bodyColor",
+	"question.color",
+	"header.color",
+	"card.cornerRadius",
+	"card.width",
+	"card.paddingX",
+	"card.headerPaddingY",
+	"card.bodyPaddingY",
+	"card.shadow",
+	...BLENDING_PARAM_KEYS,
 ] as const;
 
 export type TabContentProps = {
@@ -85,15 +139,12 @@ function buildTransformTab({
 }): PropertiesTabDef {
 	return {
 		id: "transform",
-		label: "Transformar",
+		label: "Ajustes",
 		icon: <HugeiconsIcon icon={ArrowExpandIcon} size={16} />,
 		content: ({ trackId }) => (
-			<ElementParamsTab
-				element={element}
-				trackId={trackId}
-				paramKeys={TRANSFORM_PARAM_KEYS}
-				sectionKey="transform"
-			/>
+			<div className="p-3.5 pt-4">
+				<TransformFields element={element} trackId={trackId} />
+			</div>
 		),
 	};
 }
@@ -215,12 +266,65 @@ function buildTextTab({ element }: { element: TextElement }): PropertiesTabDef {
 				<ElementParamsTab
 					element={element}
 					trackId={trackId}
-					paramKeys={TEXT_PARAM_KEYS}
+					paramKeys={TEXT_CORE_PARAM_KEYS}
 					sectionKey="text"
+					fieldLayout="row"
 				/>
-				<div className="px-3 pt-1 pb-3">
+				<div className="flex items-center gap-2 px-3.5 pt-1 pb-3.5">
 					<SaveTextPresetButton element={element} />
+					<LoadTextPresetButton element={element} trackId={trackId} />
 				</div>
+			</div>
+		),
+	};
+}
+
+function buildTextStyleTab({
+	element,
+}: {
+	element: TextElement;
+}): PropertiesTabDef {
+	return {
+		id: "style",
+		label: "Estilo",
+		icon: <HugeiconsIcon icon={RainDropIcon} size={16} />,
+		content: ({ trackId }) => (
+			<>
+				<ElementParamsTab
+					element={element}
+					trackId={trackId}
+					paramKeys={TEXT_STYLE_PARAM_KEYS}
+					sectionKey="text-style"
+					fieldLayout="row"
+				/>
+				<div className="px-3.5">
+					<FadeControls
+						trackId={trackId}
+						elementId={element.id}
+						duration={element.duration}
+						propertyPath="opacity"
+						baseValue={
+							typeof element.params.opacity === "number"
+								? element.params.opacity
+								: 1
+						}
+						silentValue={0}
+						label="Fade de vídeo"
+					/>
+				</div>
+			</>
+		),
+	};
+}
+
+function buildTextAnimationTab(): PropertiesTabDef {
+	return {
+		id: "animation",
+		label: "Animação",
+		icon: <HugeiconsIcon icon={SparklesIcon} size={16} />,
+		content: () => (
+			<div className="text-muted-foreground flex h-32 items-center justify-center px-4 text-center text-sm">
+				Animações de texto ainda não estão disponíveis.
 			</div>
 		),
 	};
@@ -263,8 +367,9 @@ function getTextConfig({
 		defaultTab: "text",
 		tabs: [
 			buildTextTab({ element }),
+			buildTextStyleTab({ element }),
+			buildTextAnimationTab(),
 			buildTransformTab({ element }),
-			buildBlendingTab({ element }),
 		],
 	};
 }
@@ -338,6 +443,62 @@ function getGraphicConfig({
 	};
 }
 
+function buildInstagramQuestionContentTab({
+	element,
+}: {
+	element: InstagramQuestionElement;
+}): PropertiesTabDef {
+	return {
+		id: "content",
+		label: "Conteúdo",
+		icon: <HugeiconsIcon icon={MessageQuestionIcon} size={16} />,
+		content: ({ trackId }) => (
+			<ElementParamsTab
+				element={element}
+				trackId={trackId}
+				paramKeys={INSTAGRAM_QUESTION_CONTENT_PARAM_KEYS}
+				sectionKey="instagram-question-content"
+			/>
+		),
+	};
+}
+
+function buildInstagramQuestionStyleTab({
+	element,
+}: {
+	element: InstagramQuestionElement;
+}): PropertiesTabDef {
+	return {
+		id: "style",
+		label: "Estilo",
+		icon: <HugeiconsIcon icon={RainDropIcon} size={16} />,
+		content: ({ trackId }) => (
+			<ElementParamsTab
+				element={element}
+				trackId={trackId}
+				paramKeys={INSTAGRAM_QUESTION_STYLE_PARAM_KEYS}
+				sectionKey="instagram-question-style"
+				fieldLayout="row"
+			/>
+		),
+	};
+}
+
+function getInstagramQuestionConfig({
+	element,
+}: {
+	element: InstagramQuestionElement;
+}): ElementPropertiesConfig {
+	return {
+		defaultTab: "content",
+		tabs: [
+			buildInstagramQuestionContentTab({ element }),
+			buildInstagramQuestionStyleTab({ element }),
+			buildTransformTab({ element }),
+		],
+	};
+}
+
 function getAudioConfig({
 	element,
 }: {
@@ -380,6 +541,8 @@ export function getPropertiesConfig({
 			return getStickerConfig({ element });
 		case "graphic":
 			return getGraphicConfig({ element });
+		case "instagramQuestion":
+			return getInstagramQuestionConfig({ element });
 		case "audio":
 			return getAudioConfig({ element });
 		case "effect":

@@ -12,6 +12,7 @@ import {
 	buildTextElement,
 	buildGraphicElement,
 	buildStickerElement,
+	buildInstagramQuestionElement,
 	buildElementFromMedia,
 	buildEffectElement,
 } from "@/timeline/element-utils";
@@ -96,6 +97,8 @@ function elementTypeFromDrag({
 			return "graphic";
 		case "sticker":
 			return "sticker";
+		case "instagramQuestion":
+			return "instagramQuestion";
 		case "effect":
 			return "effect";
 		case "media":
@@ -370,6 +373,9 @@ export class DragDropController {
 			case "sticker":
 				this.executeStickerDrop({ target, dragData });
 				return;
+			case "instagramQuestion":
+				this.executeInstagramQuestionDrop({ target, dragData });
+				return;
 			case "effect":
 				this.executeEffectDrop({ target, dragData });
 				return;
@@ -405,6 +411,20 @@ export class DragDropController {
 	}): void {
 		const element = buildStickerElement({
 			stickerId: dragData.stickerId,
+			name: dragData.name,
+			startTime: target.xPosition,
+		});
+		this.insertAtTarget({ element, target, trackType: "graphic" });
+	}
+
+	private executeInstagramQuestionDrop({
+		target,
+		dragData,
+	}: {
+		target: DropTarget;
+		dragData: Extract<TimelineDragData, { type: "instagramQuestion" }>;
+	}): void {
+		const element = buildInstagramQuestionElement({
 			name: dragData.name,
 			startTime: target.xPosition,
 		});

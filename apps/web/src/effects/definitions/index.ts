@@ -1,8 +1,13 @@
 import { effectsRegistry } from "../registry";
 import { blurEffectDefinition } from "./blur";
+import { chromaKeyEffectDefinition } from "./chroma-key";
 import { colorGradeEffectDefinition } from "../color-grade/definition";
 
-const defaultEffects = [blurEffectDefinition, colorGradeEffectDefinition];
+const defaultEffects = [
+	blurEffectDefinition,
+	colorGradeEffectDefinition,
+	chromaKeyEffectDefinition,
+];
 
 export function registerDefaultEffects(): void {
 	for (const definition of defaultEffects) {

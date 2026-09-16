@@ -25,6 +25,8 @@ import { usePropertyDraft } from "@/components/editor/panels/properties/hooks/us
 import { dimensionToAspectRatio } from "@/utils/geometry";
 import { formatNumberForDisplay } from "@/utils/math";
 import type { TCanvasSize } from "@/project/types";
+import { usePreviewStore } from "@/preview/preview-store";
+import { PREVIEW_RESOLUTION_SCALE_OPTIONS } from "@/preview/preview-resolution-scale";
 
 const ASPECT_RATIO_LABELS: Record<string, string> = {
 	"16:9": "16:9",
@@ -87,6 +89,10 @@ export function ProjectSettingsPopover() {
 	const editor = useEditor();
 	const activeProject = useEditor((e) => e.project.getActive());
 	const { canvasPresets } = useEditorStore();
+	const previewResolutionScale = usePreviewStore((s) => s.previewResolutionScale);
+	const setPreviewResolutionScale = usePreviewStore(
+		(s) => s.setPreviewResolutionScale,
+	);
 
 	const currentCanvasSize = activeProject.settings.canvasSize;
 	const canvasSizeMode = activeProject.settings.canvasSizeMode ?? "preset";
@@ -240,6 +246,43 @@ export function ProjectSettingsPopover() {
 								/>
 							</div>
 						)}
+					</div>
+
+					<div className="border-border border-t pt-3">
+						<p className="text-foreground mb-3 text-[13px] font-semibold">
+							Visualização
+						</p>
+						<div className="flex flex-col gap-1.5">
+							<span className="text-muted-foreground text-xs">
+								Qualidade da pré-visualização
+							</span>
+							<Select
+								value={previewResolutionScale}
+								onValueChange={(value) =>
+									setPreviewResolutionScale(
+										value as (typeof PREVIEW_RESOLUTION_SCALE_OPTIONS)[number]["value"],
+									)
+								}
+							>
+								<SelectTrigger
+									className="h-9 w-full"
+									title="Reduza a resolução do Viewer para obter uma reprodução mais fluida. A mídia original e a exportação não são alteradas."
+								>
+									<SelectValue placeholder="Selecione a qualidade" />
+								</SelectTrigger>
+								<SelectContent>
+									{PREVIEW_RESOLUTION_SCALE_OPTIONS.map((option) => (
+										<SelectItem key={option.value} value={option.value}>
+											{option.label}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+							<p className="text-muted-foreground text-[11px] leading-snug">
+								Reduz a qualidade apenas durante a edição para melhorar o
+								desempenho. Não afeta a exportação.
+							</p>
+						</div>
 					</div>
 				</div>
 			</PopoverContent>

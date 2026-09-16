@@ -11,10 +11,6 @@ const PREVIEW_IMAGE_PATH = "/effects/preview.jpg";
 class EffectPreviewService {
 	private testSourceCanvas: OffscreenCanvas | null = null;
 	private previewImageElement: HTMLImageElement | null = null;
-	// A real frame of the project currently being edited, captured on demand
-	// (clip selection change, explicit refresh) — never re-captured on every
-	// playback tick. Takes priority over the generic stock photo once set.
-	private referenceFrameCanvas: OffscreenCanvas | null = null;
 	private onReadyCallbacks = new Set<() => void>();
 
 	readonly PREVIEW_SIZE = PREVIEW_SIZE;
@@ -26,39 +22,6 @@ class EffectPreviewService {
 	onPreviewImageReady({ callback }: { callback: () => void }): () => void {
 		this.onReadyCallbacks.add(callback);
 		return () => this.onReadyCallbacks.delete(callback);
-	}
-
-	hasReferenceFrame(): boolean {
-		return this.referenceFrameCanvas !== null;
-	}
-
-	/** Captures a real frame from the project as the preview source (cover-fit into the square preview), replacing the generic stock photo. Pass null to clear it and fall back to the stock photo again. */
-	setReferenceFrame({ source }: { source: CanvasImageSource | null }): void {
-		if (!source) {
-			this.referenceFrameCanvas = null;
-			this.notifyReady();
-			return;
-		}
-
-		const { canvas, context } = createCanvasSurface({
-			width: PREVIEW_SIZE,
-			height: PREVIEW_SIZE,
-		});
-		const { width: sourceWidth, height: sourceHeight } = getSourceDimensions(source);
-		if (sourceWidth > 0 && sourceHeight > 0) {
-			const coverScale = Math.max(PREVIEW_SIZE / sourceWidth, PREVIEW_SIZE / sourceHeight);
-			const drawWidth = sourceWidth * coverScale;
-			const drawHeight = sourceHeight * coverScale;
-			context.drawImage(
-				source,
-				(PREVIEW_SIZE - drawWidth) / 2,
-				(PREVIEW_SIZE - drawHeight) / 2,
-				drawWidth,
-				drawHeight,
-			);
-		}
-		this.referenceFrameCanvas = canvas;
-		this.notifyReady();
 	}
 
 	private notifyReady(): void {
@@ -170,9 +133,6 @@ class EffectPreviewService {
 		width: number;
 		height: number;
 	}): OffscreenCanvas | null {
-		if (this.referenceFrameCanvas) {
-			return this.referenceFrameCanvas;
-		}
 		if (
 			!this.testSourceCanvas ||
 			this.testSourceCanvas.width !== width ||
@@ -201,22 +161,6 @@ class EffectPreviewService {
 			passes,
 		});
 	}
-}
-
-function getSourceDimensions(source: CanvasImageSource): { width: number; height: number } {
-	if (source instanceof HTMLCanvasElement || source instanceof OffscreenCanvas) {
-		return { width: source.width, height: source.height };
-	}
-	if (source instanceof HTMLVideoElement) {
-		return { width: source.videoWidth, height: source.videoHeight };
-	}
-	if (source instanceof HTMLImageElement) {
-		return { width: source.naturalWidth, height: source.naturalHeight };
-	}
-	if (source instanceof ImageBitmap) {
-		return { width: source.width, height: source.height };
-	}
-	return { width: 0, height: 0 };
 }
 
 export const effectPreviewService = new EffectPreviewService();

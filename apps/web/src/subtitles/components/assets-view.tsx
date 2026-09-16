@@ -24,6 +24,7 @@ import { buildCaptionChunks } from "@/transcription/caption";
 import { insertCaptionChunksAsTextTrack } from "@/subtitles/insert";
 import { parseSubtitleFile } from "@/subtitles/parse";
 import { CaptionBlockEditor } from "@/subtitles/components/caption-blocks";
+import { ViralTitlesSection } from "@/subtitles/components/viral-titles-section";
 import { Spinner } from "@/components/ui/spinner";
 import {
 	Section,
@@ -335,6 +336,7 @@ export function Captions() {
 					)}
 				</SectionContent>
 			</Section>
+			<ViralTitlesSection />
 			<CaptionBlockEditor />
 		</PanelView>
 	);

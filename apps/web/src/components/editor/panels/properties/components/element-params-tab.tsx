@@ -20,11 +20,13 @@ export function ElementParamsTab({
 	trackId,
 	paramKeys,
 	sectionKey,
+	fieldLayout = "stack",
 }: {
 	element: TimelineElement;
 	trackId: string;
 	paramKeys?: readonly string[];
 	sectionKey: string;
+	fieldLayout?: "stack" | "row";
 }) {
 	const { localTime, isPlayheadWithinElementRange } = useElementPlayhead({
 		startTime: element.startTime,
@@ -50,6 +52,7 @@ export function ElementParamsTab({
 								baseValue={baseValues[param.key] ?? param.default}
 								localTime={localTime}
 								isPlayheadWithinElementRange={isPlayheadWithinElementRange}
+								layout={fieldLayout}
 							/>
 						))}
 				</SectionFields>
@@ -65,6 +68,7 @@ function ElementParamField({
 	baseValue,
 	localTime,
 	isPlayheadWithinElementRange,
+	layout,
 }: {
 	element: TimelineElement;
 	trackId: string;
@@ -72,7 +76,60 @@ function ElementParamField({
 	baseValue: ParamValue;
 	localTime: MediaTime;
 	isPlayheadWithinElementRange: boolean;
+	layout: "stack" | "row";
 }) {
+	const field = useElementParamField({
+		element,
+		trackId,
+		param,
+		baseValue,
+		localTime,
+		isPlayheadWithinElementRange,
+	});
+
+	// A multiline textarea (the caption/text content itself) never fits a
+	// compact label-left/control-right row — it always gets its own full-width
+	// block regardless of what the rest of the tab uses.
+	const effectiveLayout = param.type === "text" ? "stack" : layout;
+
+	return (
+		<PropertyParamField
+			param={param}
+			value={field.value}
+			onPreview={field.onPreview}
+			onCommit={field.onCommit}
+			keyframe={field.keyframe}
+			layout={effectiveLayout}
+		/>
+	);
+}
+
+/**
+ * Resolves a single param's animated value + keyframe wiring, without
+ * rendering anything — lets bespoke tab layouts (e.g. the compact transform
+ * fields) compose their own controls around the same real state/commands
+ * used by the generic per-param loop above.
+ */
+export function useElementParamField({
+	element,
+	trackId,
+	param,
+	baseValue,
+	localTime,
+	isPlayheadWithinElementRange,
+}: {
+	element: TimelineElement;
+	trackId: string;
+	param: ElementParamDefinition;
+	baseValue: ParamValue;
+	localTime: MediaTime;
+	isPlayheadWithinElementRange: boolean;
+}): {
+	value: ParamValue;
+	onPreview: (value: ParamValue) => void;
+	onCommit: () => void;
+	keyframe?: { isActive: boolean; isDisabled: boolean; onToggle: () => void };
+} {
 	const resolvedValue = resolveAnimationPathValueAtTime({
 		animations: element.animations,
 		propertyPath: param.key,
@@ -92,23 +149,33 @@ function ElementParamField({
 			writeElementParamValue({ element, param, value }),
 	});
 
-	return (
-		<PropertyParamField
-			param={param}
-			value={resolvedValue}
-			onPreview={animatedParam.onPreview}
-			onCommit={animatedParam.onCommit}
-			keyframe={
-				param.keyframable === false
-					? undefined
-					: {
-							isActive: animatedParam.isKeyframedAtTime,
-							isDisabled: !isPlayheadWithinElementRange,
-							onToggle: animatedParam.toggleKeyframe,
-						}
-			}
-		/>
-	);
+	return {
+		value: resolvedValue,
+		onPreview: animatedParam.onPreview,
+		onCommit: animatedParam.onCommit,
+		keyframe:
+			param.keyframable === false
+				? undefined
+				: {
+						isActive: animatedParam.isKeyframedAtTime,
+						isDisabled: !isPlayheadWithinElementRange,
+						onToggle: animatedParam.toggleKeyframe,
+					},
+	};
+}
+
+/** Reads a single param's current base value + resolves the param definition, for use outside the generic per-tab loop. */
+export function useSingleElementParamValue({
+	element,
+	key,
+}: {
+	element: TimelineElement;
+	key: string;
+}): { param: ElementParamDefinition; baseValue: ParamValue } | null {
+	const param = getElementParams({ element }).find((p) => p.key === key);
+	if (!param) return null;
+	const value = readElementParamValue({ element, param });
+	return { param, baseValue: value ?? param.default };
 }
 
 function buildValues({

@@ -237,16 +237,33 @@ export class TimelineManager {
 		return findTrackInSceneTracks({ tracks: activeScene.tracks, trackId });
 	}
 
+	/**
+	 * Preview-aware element lookup — UI reads (Inspector, clipboard, viewer
+	 * hit-testing) go through this instead of `getTrackById`/`getElementByRef`
+	 * so an in-progress edit (`previewElements`, not yet `commitPreview`d)
+	 * shows up immediately. Without this, a controlled input bound to the
+	 * committed (pre-edit) value fights the DOM's live keystrokes every
+	 * render and only the just-typed character survives — see the
+	 * "Caixinha de perguntas" text-input bug this was written to fix.
+	 * Command/undo-diff building intentionally keeps using the committed-only
+	 * `getTrackById`/`getElementByRef` — those need the last real baseline,
+	 * not a not-yet-committed preview.
+	 */
 	getElementsWithTracks({
 		elements,
 	}: {
 		elements: { trackId: string; elementId: string }[];
 	}): Array<{ track: TimelineTrack; element: TimelineElement }> {
+		const tracks = this.getPreviewTracks();
+		if (!tracks) {
+			return [];
+		}
+
 		const result: Array<{ track: TimelineTrack; element: TimelineElement }> =
 			[];
 
 		for (const { trackId, elementId } of elements) {
-			const track = this.getTrackById({ trackId });
+			const track = findTrackInSceneTracks({ tracks, trackId });
 			const element = track?.elements.find(
 				(trackElement) => trackElement.id === elementId,
 			);

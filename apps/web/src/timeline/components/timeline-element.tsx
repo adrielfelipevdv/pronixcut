@@ -23,7 +23,11 @@ import {
 	timelineTimeToSnappedPixels,
 } from "@/timeline";
 import { getTrackHeight } from "./track-layout";
-import { getTimelineElementClassName, TIMELINE_TRACK_THEME } from "./theme";
+import {
+	getTimelineElementClassName,
+	TIMELINE_AUDIO_WAVEFORM_COLOR,
+	TIMELINE_TRACK_THEME,
+} from "./theme";
 import {
 	ContextMenu,
 	ContextMenuContent,
@@ -44,6 +48,7 @@ import type { MediaAsset } from "@/media/types";
 import { mediaSupportsAudio } from "@/media/media-utils";
 import {
 	canToggleSourceAudio,
+	doesElementHaveEnabledAudio,
 	getSourceAudioActionLabel,
 	isSourceAudioSeparated,
 } from "@/timeline/audio-separation";
@@ -74,6 +79,7 @@ import {
 	Exchange01Icon,
 	KeyframeIcon,
 	MagicWand05Icon,
+	MessageQuestionIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { uppercase } from "@/utils/string";
@@ -578,7 +584,16 @@ function ElementInner({
 					<button
 						type="button"
 						tabIndex={-1}
-						className="absolute inset-0 size-full flex flex-col"
+						// Chromium's UA stylesheet gives <button> a default
+						// align-items: flex-start even once display is overridden to
+						// flex, unlike a plain <div> (which defaults to stretch). In
+						// this flex-col button, align-items governs the cross axis —
+						// width — so every row below it was sizing to fit-content
+						// instead of the button's real width, collapsing to 0 once
+						// content is absolutely positioned (as the audio waveform's
+						// canvas is). items-stretch restores the width every child row
+						// actually needs.
+						className="absolute inset-0 size-full flex flex-col items-stretch"
 						onClick={(event) => onElementClick({ event, element })}
 						onMouseDown={(event) => onElementMouseDown({ event, element })}
 					>
@@ -954,6 +969,22 @@ function StickerElementContent({
 	);
 }
 
+function InstagramQuestionElementContent({
+	element,
+}: {
+	element: Extract<TimelineElementType, { type: "instagramQuestion" }>;
+}) {
+	return (
+		<div className="flex size-full items-center gap-2 pl-2">
+			<HugeiconsIcon
+				icon={MessageQuestionIcon}
+				className="size-4 shrink-0 text-white"
+			/>
+			<span className="truncate text-xs text-white">{element.name}</span>
+		</div>
+	);
+}
+
 function GraphicElementContent({
 	element,
 }: {
@@ -1020,7 +1051,7 @@ function AudioElementContent({
 	);
 	if (audioBuffer || audioUrl || sourceFile) {
 		return (
-			<div className="group/audio relative size-full">
+			<div className="group/audio relative size-full self-stretch">
 				<MediaElementHeader name={mediaLabel} hasFade={false} />
 				<div className="absolute inset-x-0 top-5 bottom-0 overflow-hidden">
 					<AudioWaveform
@@ -1043,7 +1074,7 @@ function AudioElementContent({
 	}
 
 	return (
-		<div className="group/audio relative size-full">
+		<div className="group/audio relative size-full self-stretch">
 			<div className="flex size-full items-center pl-2">
 				<span className="text-foreground/80 truncate text-xs">
 					{element.name}
@@ -1113,6 +1144,9 @@ function TiledMediaContent({
 			? mediaAsset.width / mediaAsset.height
 			: THUMBNAIL_ASPECT_RATIO;
 	const tileWidth = trackHeight * mediaAspectRatio;
+	const showEmbeddedWaveform =
+		element.type === "video" &&
+		doesElementHaveEnabledAudio({ element, mediaAsset });
 
 	return (
 		<>
@@ -1127,6 +1161,13 @@ function TiledMediaContent({
 					pointerEvents: "none",
 				}}
 			/>
+			{showEmbeddedWaveform && element.type === "video" && (
+				<VideoEmbeddedWaveform
+					element={element}
+					mediaAsset={mediaAsset}
+					trackHeight={trackHeight}
+				/>
+			)}
 			<MediaElementHeader
 				name={mediaAsset?.name}
 				leading={
@@ -1137,6 +1178,65 @@ function TiledMediaContent({
 				hasFade={true}
 			/>
 		</>
+	);
+}
+
+// A video's own embedded audio never gets a dedicated audio-track element
+// (that only happens after "Extrair áudio" separates it) — without this, a
+// video with dialogue/music shows literally no amplitude information at all.
+// Mirrors AudioElementContent's waveform wiring, keyed off the same mediaId
+// so a separated copy of this same file reuses the identical cached summary.
+function VideoEmbeddedWaveform({
+	element,
+	mediaAsset,
+	trackHeight,
+}: {
+	element: VideoElement;
+	mediaAsset: MediaAsset | undefined;
+	trackHeight: number;
+}) {
+	const pixelsPerSecond = useContext(PixelsPerSecondContext);
+	if (pixelsPerSecond === null) {
+		throw new Error(
+			"VideoEmbeddedWaveform must be rendered inside PixelsPerSecondContext.Provider",
+		);
+	}
+	const gainSamples = useMemo(
+		() =>
+			buildWaveformGainSamples({ element, count: WAVEFORM_GAIN_SAMPLE_COUNT }),
+		[element],
+	);
+
+	if (!mediaAsset?.file) {
+		return null;
+	}
+
+	const muted = isElementMuted({ element });
+	const waveformHeight = Math.round(trackHeight * 0.32);
+	const stripHeight = waveformHeight + 6;
+
+	return (
+		<div
+			className={cn(
+				"from-black/45 pointer-events-none absolute inset-x-0 bottom-0 bg-linear-to-t to-transparent transition-opacity duration-150",
+				muted && "opacity-35",
+			)}
+			style={{ height: stripHeight }}
+		>
+			<div className="absolute inset-x-0 bottom-0" style={{ height: waveformHeight }}>
+				<AudioWaveform
+					sourceKey={buildWaveformSourceKey({ kind: "media", id: element.mediaId })}
+					sourceFile={mediaAsset.file}
+					sourceFileIsVideo
+					gainSamples={gainSamples}
+					pixelsPerSecond={pixelsPerSecond}
+					clipDurationSec={element.duration / TICKS_PER_SECOND}
+					retime={element.retime}
+					sourceStartSec={element.trimStart / TICKS_PER_SECOND}
+					color={TIMELINE_AUDIO_WAVEFORM_COLOR}
+				/>
+			</div>
+		</div>
 	);
 }
 
@@ -1180,6 +1280,8 @@ function ElementContent({ element, track }: ElementContentProps) {
 			return <StickerElementContent element={element} />;
 		case "graphic":
 			return <GraphicElementContent element={element} />;
+		case "instagramQuestion":
+			return <InstagramQuestionElementContent element={element} />;
 		case "audio":
 			return <AudioElementContent element={element} trackId={track.id} />;
 		case "video":

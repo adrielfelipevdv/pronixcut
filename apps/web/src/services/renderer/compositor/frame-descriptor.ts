@@ -17,6 +17,10 @@ import { ImageNode } from "../nodes/image-node";
 import { RootNode } from "../nodes/root-node";
 import { StickerNode } from "../nodes/sticker-node";
 import { renderTextToContext, TextNode } from "../nodes/text-node";
+import {
+	InstagramQuestionNode,
+	renderInstagramQuestionToContext,
+} from "../nodes/instagram-question-node";
 import { VideoNode } from "../nodes/video-node";
 import type { ResolvedVisualSourceNodeState } from "../nodes/visual-node";
 import type {
@@ -204,6 +208,17 @@ async function collectNode({
 			items,
 			textures,
 		});
+		return;
+	}
+
+	if (node instanceof InstagramQuestionNode) {
+		collectInstagramQuestionNode({
+			node,
+			renderer,
+			path,
+			items,
+			textures,
+		});
 	}
 }
 
@@ -344,6 +359,50 @@ function collectTextNode({
 	});
 }
 
+function collectInstagramQuestionNode({
+	node,
+	renderer,
+	path,
+	items,
+	textures,
+}: {
+	node: InstagramQuestionNode;
+	renderer: CanvasRenderer;
+	path: string;
+	items: FrameItemDescriptor[];
+	textures: Map<string, TextureUploadDescriptor>;
+}) {
+	if (!node.resolved) {
+		return;
+	}
+
+	const textureId = `${path}:instagram-question`;
+	const { width, height } = renderer;
+	const contentHash = `instagram-question:${width}x${height}:${JSON.stringify({
+		params: node.params,
+		resolved: node.resolved,
+	})}`;
+	textures.set(textureId, {
+		kind: "rendered",
+		id: textureId,
+		contentHash,
+		width,
+		height,
+		draw: (ctx) => {
+			renderInstagramQuestionToContext({ node, ctx });
+		},
+	});
+	items.push({
+		type: "layer",
+		textureId,
+		transform: fullCanvasTransform(renderer),
+		opacity: node.resolved.opacity,
+		blendMode: node.params.blendMode ?? "normal",
+		effectPassGroups: node.resolved.effectPasses,
+		mask: null,
+	});
+}
+
 function computeVisualTransform({
 	renderer,
 	resolved,
@@ -359,14 +418,37 @@ function computeVisualTransform({
 		renderer.width / sourceWidth,
 		renderer.height / sourceHeight,
 	);
-	const scaledWidth = sourceWidth * containScale * resolved.transform.scaleX;
-	const scaledHeight = sourceHeight * containScale * resolved.transform.scaleY;
+	const signedScaleX =
+		resolved.transform.scaleX * (resolved.transform.flipHorizontal ? -1 : 1);
+	const signedScaleY =
+		resolved.transform.scaleY * (resolved.transform.flipVertical ? -1 : 1);
+	const scaledWidth = sourceWidth * containScale * signedScaleX;
+	const scaledHeight = sourceHeight * containScale * signedScaleY;
 	const absWidth = Math.abs(scaledWidth);
 	const absHeight = Math.abs(scaledHeight);
 
+	// "position" specifies where the anchor/pivot point sits on screen (the
+	// pre-existing center-anchor behavior is just the ax=ay=0.5 special case
+	// of this, since pivotOffsetLocal is then {0,0} and centerX/Y collapse
+	// back to renderer.center + position exactly as before). Rotation and
+	// scale pivot around that same point: rotate the pivot's local offset
+	// from the quad's geometric center by the current rotation, then solve
+	// for the center that keeps the (rotated) anchor world position fixed.
+	const pivotOffsetLocalX = (resolved.transform.anchor.x - 0.5) * absWidth;
+	const pivotOffsetLocalY = (resolved.transform.anchor.y - 0.5) * absHeight;
+	const angleRad = (resolved.transform.rotate * Math.PI) / 180;
+	const cos = Math.cos(angleRad);
+	const sin = Math.sin(angleRad);
+	const pivotOffsetWorldX =
+		pivotOffsetLocalX * cos - pivotOffsetLocalY * sin;
+	const pivotOffsetWorldY =
+		pivotOffsetLocalX * sin + pivotOffsetLocalY * cos;
+	const anchorWorldX = renderer.width / 2 + resolved.transform.position.x;
+	const anchorWorldY = renderer.height / 2 + resolved.transform.position.y;
+
 	return {
-		centerX: renderer.width / 2 + resolved.transform.position.x,
-		centerY: renderer.height / 2 + resolved.transform.position.y,
+		centerX: anchorWorldX - pivotOffsetWorldX,
+		centerY: anchorWorldY - pivotOffsetWorldY,
 		width: absWidth,
 		height: absHeight,
 		rotationDegrees: resolved.transform.rotate,
@@ -417,15 +499,23 @@ function buildMaskArtifacts({
 	}
 
 	const { body } = definition.renderer;
+	// Feather/stroke width are authored in absolute pixels against the
+	// project's full canvas resolution — scale them the same way position is
+	// scaled in resolve.ts (`applyCoordinateScale`) so they stay
+	// proportionally correct when the Viewer renders at a reduced preview
+	// quality, instead of looking relatively thicker/softer on a smaller
+	// render target.
+	const scaledFeatherParam = mask.params.feather * renderer.coordinateScale;
+	const scaledStrokeWidth = mask.params.strokeWidth * renderer.coordinateScale;
 	const usesOpaqueFastPath =
 		body.kind === "drawWithFeather" &&
-		mask.params.feather === 0 &&
+		scaledFeatherParam === 0 &&
 		Boolean(body.opaqueFastPath);
 	// drawWithFeather renderers encode feathering analytically in their canvas output
 	// (e.g. split mask uses a linear gradient instead of JFA). The descriptor feather is
 	// zeroed so the GPU compositor copies the mask texture as-is and does not run a second
 	// JFA feather pass on top of an already-soft texture.
-	const feather = body.kind === "drawWithFeather" ? 0 : mask.params.feather;
+	const feather = body.kind === "drawWithFeather" ? 0 : scaledFeatherParam;
 
 	const maskTextureId = `${path}:mask`;
 	const { width: canvasWidth, height: canvasHeight } = renderer;
@@ -471,7 +561,7 @@ function buildMaskArtifacts({
 						ctx: elementMaskCtx,
 						width: Math.round(transform.width),
 						height: Math.round(transform.height),
-						feather: mask.params.feather,
+						feather: scaledFeatherParam,
 					});
 				}
 				break;
@@ -489,7 +579,7 @@ function buildMaskArtifacts({
 	});
 
 	const stroke = definition.renderer.stroke;
-	const hasStroke = mask.params.strokeWidth > 0 && Boolean(stroke);
+	const hasStroke = scaledStrokeWidth > 0 && Boolean(stroke);
 	let strokeLayer: FrameItemDescriptor | null = null;
 	if (hasStroke && stroke) {
 		const strokeTextureId = `${path}:mask-stroke`;
@@ -516,7 +606,7 @@ function buildMaskArtifacts({
 						height: transform.height,
 					});
 					strokeCtx.strokeStyle = mask.params.strokeColor;
-					strokeCtx.lineWidth = mask.params.strokeWidth;
+					strokeCtx.lineWidth = scaledStrokeWidth;
 					strokeCtx.stroke(strokePath);
 					break;
 				}

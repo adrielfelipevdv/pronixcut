@@ -9,6 +9,9 @@ const defaultTransform: Transform = {
 	scaleY: 1,
 	position: { x: 0, y: 0 },
 	rotate: 0,
+	anchor: { x: 0.5, y: 0.5 },
+	flipHorizontal: false,
+	flipVertical: false,
 };
 
 const defaultOpacity = 1;
@@ -26,6 +29,27 @@ const defaultTextBackground = {
 	paddingY: 42,
 	offsetX: 0,
 	offsetY: 0,
+};
+
+const defaultTextStroke = {
+	enabled: false,
+	color: "#000000",
+	width: 6,
+};
+
+const defaultTextShadow = {
+	enabled: false,
+};
+
+const defaultWordHighlight = {
+	enabled: false,
+	activeColor: "#FFC600",
+	activeScale: 1.15,
+	animation: "pop" as const,
+	background: false,
+	backgroundColor: "#000000",
+	maxWordsPerLine: 4,
+	uppercase: false,
 };
 
 const defaultTextElement: Omit<TextElement, "id"> = {
@@ -53,11 +77,27 @@ const defaultTextElement: Omit<TextElement, "id"> = {
 		"background.paddingY": defaultTextBackground.paddingY,
 		"background.offsetX": defaultTextBackground.offsetX,
 		"background.offsetY": defaultTextBackground.offsetY,
+		"stroke.enabled": defaultTextStroke.enabled,
+		"stroke.color": defaultTextStroke.color,
+		"stroke.width": defaultTextStroke.width,
+		"shadow.enabled": defaultTextShadow.enabled,
+		"wordHighlight.enabled": defaultWordHighlight.enabled,
+		"wordHighlight.activeColor": defaultWordHighlight.activeColor,
+		"wordHighlight.activeScale": defaultWordHighlight.activeScale,
+		"wordHighlight.animation": defaultWordHighlight.animation,
+		"wordHighlight.background": defaultWordHighlight.background,
+		"wordHighlight.backgroundColor": defaultWordHighlight.backgroundColor,
+		"wordHighlight.maxWordsPerLine": defaultWordHighlight.maxWordsPerLine,
+		"wordHighlight.uppercase": defaultWordHighlight.uppercase,
 		"transform.positionX": defaultTransform.position.x,
 		"transform.positionY": defaultTransform.position.y,
 		"transform.scaleX": defaultTransform.scaleX,
 		"transform.scaleY": defaultTransform.scaleY,
 		"transform.rotate": defaultTransform.rotate,
+		"transform.anchorX": defaultTransform.anchor.x,
+		"transform.anchorY": defaultTransform.anchor.y,
+		"transform.flipHorizontal": defaultTransform.flipHorizontal,
+		"transform.flipVertical": defaultTransform.flipVertical,
 		opacity: defaultOpacity,
 		blendMode: defaultBlendMode,
 	},
@@ -80,6 +120,9 @@ export const DEFAULTS = {
 		letterSpacing: defaultTextLetterSpacing,
 		lineHeight: defaultTextLineHeight,
 		background: defaultTextBackground,
+		stroke: defaultTextStroke,
+		shadow: defaultTextShadow,
+		wordHighlight: defaultWordHighlight,
 		element: defaultTextElement,
 	},
 	timeline: {

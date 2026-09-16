@@ -10,19 +10,48 @@ import { effectPreviewService } from "@/services/renderer/effect-preview";
 import { useEditor } from "@/editor/use-editor";
 import type { EditorCore } from "@/core";
 import { buildEffectElement } from "@/timeline/element-utils";
+import { findTrackInSceneTracks } from "@/timeline/track-element-update";
+import { VISUAL_ELEMENT_TYPES } from "@/timeline";
 import type { EffectDefinition } from "@/effects/types";
 import type { ParamValues } from "@/params";
-import { BUILTIN_COLOR_GRADE_PRESETS, presetToEffectParams, type ColorGradePreset } from "@/effects/color-grade/presets";
+import { buildDefaultParamValues } from "@/params/registry";
+import { usePropertiesStore } from "@/components/editor/panels/properties/stores/properties-store";
+import { CHROMA_KEY_EFFECT_TYPE } from "@/effects/definitions/chroma-key";
+import { presetToEffectParams } from "@/effects/color-grade/presets";
 import { COLOR_GRADE_EFFECT_TYPE } from "@/effects/color-grade/definition";
 import { useCustomEffectPresetsStore, type CustomColorGradePreset } from "@/effects/color-grade/custom-presets-store";
 import { ColorGradeEditorDialog } from "@/effects/color-grade/components/color-grade-editor-dialog";
+import { useElementSelection } from "@/timeline/hooks/element/use-element-selection";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { Delete02Icon, PlusSignIcon } from "@hugeicons/core-free-icons";
+import {
+	Delete02Icon,
+	PlusSignIcon,
+	CheckmarkCircle02Icon,
+	MagicWand05Icon,
+	ArrowExpandIcon,
+} from "@hugeicons/core-free-icons";
 import { BackgroundContent } from "@/components/editor/panels/assets/views/settings/background";
+import { cn } from "@/utils/ui";
 
+// Library navigation (hover, click-to-select, scrolling past cards) must
+// never touch the project — only an explicit "Aplicar" (or drag-to-timeline,
+// or the existing hover-reveal "+") does. `selectedLibraryItemId` is pure UI
+// state for which card is highlighted in this panel; it is NEVER read by the
+// renderer and never assigned into any clip's `effects` array by itself —
+// see `applyClipEffect`/`handleAddToTimeline` below, which are the only
+// functions that actually mutate the project.
 export function EffectsView() {
+	const [selectedLibraryItemId, setSelectedLibraryItemId] = useState<string | null>(null);
 	const allDefinitions = effectsRegistry.getAll();
-	const gpuEffects = allDefinitions.filter((definition) => !isCanvas2DEffect({ definition }));
+	// Chroma key only ever makes sense attached to one specific clip (it reads
+	// that clip's own pixels), unlike blur/color-grade which can also run as a
+	// scene-wide effect-track layer — so it gets its own "apply to selected
+	// clip" card below instead of sitting in the generic scene-effect grid.
+	const gpuEffects = allDefinitions.filter(
+		(definition) =>
+			!isCanvas2DEffect({ definition }) && definition.type !== CHROMA_KEY_EFFECT_TYPE,
+	);
+	const chromaKeyDefinition = effectsRegistry.get(CHROMA_KEY_EFFECT_TYPE);
 	const customPresets = useCustomEffectPresetsStore((s) => s.presets);
 	const loadCustomPresets = useCustomEffectPresetsStore((s) => s.load);
 	const removeCustomPreset = useCustomEffectPresetsStore((s) => s.remove);
@@ -54,16 +83,41 @@ export function EffectsView() {
 
 				<section className="flex flex-col gap-2">
 					<h3 className="text-muted-foreground text-xs font-medium uppercase tracking-wide">
-						Efeitos
+						Resolve FX
 					</h3>
-					<EffectsGrid effects={gpuEffects} />
+					<div
+						className="grid gap-2"
+						style={{ gridTemplateColumns: "repeat(auto-fill, minmax(96px, 1fr))" }}
+					>
+						<ResolveFxTransformItem />
+					</div>
 				</section>
 
 				<section className="flex flex-col gap-2">
 					<h3 className="text-muted-foreground text-xs font-medium uppercase tracking-wide">
-						Pré-definidos
+						Efeitos
 					</h3>
-					<PresetsGrid presets={BUILTIN_COLOR_GRADE_PRESETS} />
+					<EffectsGrid
+						effects={gpuEffects}
+						selectedId={selectedLibraryItemId}
+						onSelect={setSelectedLibraryItemId}
+					/>
+				</section>
+
+				<section className="flex flex-col gap-2">
+					<h3 className="text-muted-foreground text-xs font-medium uppercase tracking-wide">
+						Chroma Key
+					</h3>
+					<div
+						className="grid gap-2"
+						style={{ gridTemplateColumns: "repeat(auto-fill, minmax(96px, 1fr))" }}
+					>
+						<ChromaKeyItem
+							definition={chromaKeyDefinition}
+							isSelected={selectedLibraryItemId === chromaKeyDefinition.type}
+							onSelect={() => setSelectedLibraryItemId(chromaKeyDefinition.type)}
+						/>
+					</div>
 				</section>
 
 				<section className="flex flex-col gap-2">
@@ -92,15 +146,45 @@ export function EffectsView() {
 	);
 }
 
-function EffectsGrid({ effects }: { effects: EffectDefinition[] }) {
+function EffectsGrid({
+	effects,
+	selectedId,
+	onSelect,
+}: {
+	effects: EffectDefinition[];
+	selectedId: string | null;
+	onSelect: (id: string) => void;
+}) {
 	return (
 		<div
 			className="grid gap-2"
 			style={{ gridTemplateColumns: "repeat(auto-fill, minmax(96px, 1fr))" }}
 		>
 			{effects.map((effect) => (
-				<EffectItem key={effect.type} effect={effect} />
+				<EffectItem
+					key={effect.type}
+					effect={effect}
+					isSelected={selectedId === effect.type}
+					onSelect={() => onSelect(effect.type)}
+				/>
 			))}
+		</div>
+	);
+}
+
+// The card's own thumbnail intentionally shows the stock demo photo with the
+// effect applied (that's the whole point of a preview). The floating
+// drag-ghost is different: it can hover directly over the main viewer while
+// the user drags toward the timeline, and a demo photo appearing "in" the
+// video there reads as a bug, not a preview — so effects get a plain
+// icon+name ghost instead, never the demo photo.
+function EffectDragGhost({ name }: { name: string }) {
+	return (
+		<div className="bg-popover text-foreground flex size-full flex-col items-center justify-center gap-1 p-2">
+			<HugeiconsIcon icon={MagicWand05Icon} className="text-primary size-5" />
+			<span className="max-w-full truncate text-center text-[11px] font-medium">
+				{name}
+			</span>
 		</div>
 	);
 }
@@ -132,7 +216,15 @@ function EffectPreviewCanvas({
 	return <canvas ref={canvasRef} className="size-full" />;
 }
 
-function EffectItem({ effect }: { effect: EffectDefinition }) {
+function EffectItem({
+	effect,
+	isSelected,
+	onSelect,
+}: {
+	effect: EffectDefinition;
+	isSelected: boolean;
+	onSelect: () => void;
+}) {
 	const editor = useEditor();
 
 	const handleAddToTimeline = useCallback(() => {
@@ -148,25 +240,210 @@ function EffectItem({ effect }: { effect: EffectDefinition }) {
 		});
 	}, [editor, effect.type]);
 
+	// Selecting a card is pure navigation — it only sets which card is
+	// highlighted in THIS panel (`isSelected`/`onSelect`, owned by
+	// EffectsView above). It never touches the timeline/project; only
+	// `handleAddToTimeline` (the hover "+", drag-to-timeline, or the
+	// "Aplicar" button below) does that.
 	const preview = <EffectPreviewCanvas effectType={effect.type} />;
 
 	return (
-		<DraggableItem
-			name={effect.name}
-			preview={preview}
-			dragData={{
-				id: effect.type,
-				name: effect.name,
-				type: "effect",
-				effectType: effect.type,
-				targetElementTypes: EFFECT_TARGET_ELEMENT_TYPES,
-			}}
-			onAddToTimeline={handleAddToTimeline}
-			aspectRatio={1}
-			isRounded
-			variant="card"
-			containerClassName="w-full"
-		/>
+		<div
+			className={cn(
+				"flex flex-col gap-1 rounded-md p-1 ring-1 ring-transparent transition-colors",
+				isSelected && "ring-primary bg-primary/5",
+			)}
+			onClick={onSelect}
+		>
+			<DraggableItem
+				name={effect.name}
+				preview={preview}
+				dragGhost={<EffectDragGhost name={effect.name} />}
+				dragData={{
+					id: effect.type,
+					name: effect.name,
+					type: "effect",
+					effectType: effect.type,
+					targetElementTypes: EFFECT_TARGET_ELEMENT_TYPES,
+				}}
+				onAddToTimeline={handleAddToTimeline}
+				aspectRatio={1}
+				isRounded
+				variant="card"
+				containerClassName="w-full"
+			/>
+			{isSelected && (
+				<Button
+					size="sm"
+					variant="secondary"
+					className="h-6 gap-1 text-xs"
+					onClick={(event) => {
+						event.stopPropagation();
+						handleAddToTimeline();
+					}}
+				>
+					<HugeiconsIcon icon={CheckmarkCircle02Icon} className="size-3.5" />
+					Aplicar
+				</Button>
+			)}
+		</div>
+	);
+}
+
+function applyClipEffect({
+	editor,
+	effectType,
+	initialParams,
+	label,
+}: {
+	editor: EditorCore;
+	effectType: string;
+	initialParams: ParamValues;
+	label: string;
+}) {
+	const selected = editor.selection.getSelectedElements()[0];
+	if (!selected) {
+		toast.error("Selecione um clipe na timeline para aplicar esse efeito");
+		return;
+	}
+	editor.timeline.addClipEffect({
+		trackId: selected.trackId,
+		elementId: selected.elementId,
+		effectType,
+		initialParams,
+	});
+	toast.success(`"${label}" aplicado ao clipe selecionado`);
+}
+
+// Transform (position/scale/rotation/anchor/opacity/flip) isn't a toggleable
+// effect — every visual clip already has it, fully keyframable, with its own
+// on-canvas handles (see TransformFields/use-transform-handles). This card
+// exists purely for discoverability: "Aplicar" jumps the Inspector straight
+// to that clip's "Ajustes" tab instead of duplicating the controls here.
+function ResolveFxTransformItem() {
+	const editor = useEditor();
+	const { selectedElements } = useElementSelection();
+	const hasSelection = selectedElements.length > 0;
+
+	const handleApply = useCallback(() => {
+		const selected = selectedElements[0];
+		if (!selected) {
+			toast.error("Selecione um clipe na timeline para editar a transformação");
+			return;
+		}
+		const track = findTrackInSceneTracks({
+			tracks: editor.scenes.getActiveScene().tracks,
+			trackId: selected.trackId,
+		});
+		const element = track?.elements.find((el) => el.id === selected.elementId);
+		if (
+			!element ||
+			!(VISUAL_ELEMENT_TYPES as readonly string[]).includes(element.type)
+		) {
+			toast.error("Esse clipe não tem controles de transformação");
+			return;
+		}
+		usePropertiesStore.getState().setActiveTab({
+			elementType: element.type,
+			tabId: "transform",
+		});
+		toast.success('Abra "Ajustes" no painel de Propriedades para editar a Transformação');
+	}, [editor, selectedElements]);
+
+	return (
+		<div className="flex flex-col gap-1 rounded-md p-1">
+			<div className="bg-accent border-border relative flex aspect-square w-full items-center justify-center overflow-hidden rounded-sm border">
+				<HugeiconsIcon
+					icon={ArrowExpandIcon}
+					className="text-muted-foreground size-6"
+				/>
+			</div>
+			<span className="text-muted-foreground w-full truncate text-left text-[0.7rem]">
+				Transformação
+			</span>
+			<Button
+				size="sm"
+				variant="secondary"
+				className="h-6 gap-1 text-xs"
+				disabled={!hasSelection}
+				onClick={handleApply}
+			>
+				<HugeiconsIcon icon={CheckmarkCircle02Icon} className="size-3.5" />
+				Aplicar
+			</Button>
+		</div>
+	);
+}
+
+function ChromaKeyItem({
+	definition,
+	isSelected,
+	onSelect,
+}: {
+	definition: EffectDefinition;
+	isSelected: boolean;
+	onSelect: () => void;
+}) {
+	const editor = useEditor();
+	const { selectedElements } = useElementSelection();
+	const hasCompatibleClip = selectedElements.length > 0;
+	const defaultParams = buildDefaultParamValues(definition.params);
+
+	const handleApply = useCallback(() => {
+		applyClipEffect({
+			editor,
+			effectType: definition.type,
+			initialParams: defaultParams,
+			label: definition.name,
+		});
+	}, [editor, definition.type, definition.name, defaultParams]);
+
+	return (
+		<div
+			className={cn(
+				"flex flex-col gap-1 rounded-md p-1 ring-1 ring-transparent transition-colors",
+				isSelected && "ring-primary bg-primary/5",
+			)}
+			onClick={onSelect}
+		>
+			<DraggableItem
+				name={definition.name}
+				preview={<EffectPreviewCanvas effectType={definition.type} params={defaultParams} />}
+				dragGhost={<EffectDragGhost name={definition.name} />}
+				dragData={{
+					id: definition.type,
+					name: definition.name,
+					type: "effect",
+					effectType: definition.type,
+					targetElementTypes: EFFECT_TARGET_ELEMENT_TYPES,
+				}}
+				onAddToTimeline={handleApply}
+				aspectRatio={1}
+				isRounded
+				variant="card"
+				containerClassName="w-full"
+			/>
+			{isSelected && (
+				<Button
+					size="sm"
+					variant="secondary"
+					className="h-6 gap-1 text-xs"
+					disabled={!hasCompatibleClip}
+					title={
+						hasCompatibleClip
+							? undefined
+							: "Selecione um vídeo ou imagem na linha do tempo."
+					}
+					onClick={(event) => {
+						event.stopPropagation();
+						handleApply();
+					}}
+				>
+					<HugeiconsIcon icon={CheckmarkCircle02Icon} className="size-3.5" />
+					Aplicar
+				</Button>
+			)}
+		</div>
 	);
 }
 
@@ -191,46 +468,6 @@ function applyColorGradeToSelection({
 		initialParams,
 	});
 	toast.success(`"${label}" aplicado ao clipe selecionado`);
-}
-
-function PresetsGrid({ presets }: { presets: ColorGradePreset[] }) {
-	return (
-		<div
-			className="grid gap-2"
-			style={{ gridTemplateColumns: "repeat(auto-fill, minmax(96px, 1fr))" }}
-		>
-			{presets.map((preset) => (
-				<PresetItem key={preset.id} preset={preset} />
-			))}
-		</div>
-	);
-}
-
-function PresetItem({ preset }: { preset: ColorGradePreset }) {
-	const editor = useEditor();
-	const params = presetToEffectParams(preset.values);
-
-	return (
-		<DraggableItem
-			name={preset.name}
-			preview={<EffectPreviewCanvas effectType={COLOR_GRADE_EFFECT_TYPE} params={params} />}
-			dragData={{
-				id: `preset:${preset.id}`,
-				name: preset.name,
-				type: "effect",
-				effectType: COLOR_GRADE_EFFECT_TYPE,
-				targetElementTypes: EFFECT_TARGET_ELEMENT_TYPES,
-				initialParams: params,
-			}}
-			onAddToTimeline={() =>
-				applyColorGradeToSelection({ editor, initialParams: params, label: preset.name })
-			}
-			aspectRatio={1}
-			isRounded
-			variant="card"
-			containerClassName="w-full"
-		/>
-	);
 }
 
 function CustomPresetsGrid({
@@ -267,6 +504,7 @@ function CustomPresetItem({
 			<DraggableItem
 				name={preset.name}
 				preview={<EffectPreviewCanvas effectType={COLOR_GRADE_EFFECT_TYPE} params={params} />}
+				dragGhost={<EffectDragGhost name={preset.name} />}
 				dragData={{
 					id: `custom:${preset.id}`,
 					name: preset.name,

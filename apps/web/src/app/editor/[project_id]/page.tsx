@@ -22,6 +22,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useEditor } from "@/editor/use-editor";
 import { useElementSelection } from "@/timeline/hooks/element/use-element-selection";
 import { useAssetsPanelStore } from "@/components/editor/panels/assets/assets-panel-store";
+import { usePropertiesStore } from "@/components/editor/panels/properties/stores/properties-store";
 import { Cancel01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Button } from "@/components/ui/button";
@@ -36,6 +37,7 @@ import {
 	bookmarkNotesPreviewOverlay,
 	getBookmarkPreviewOverlaySource,
 } from "@/timeline/bookmarks/index";
+import { RelinkDialog } from "@/project-file/components/relink-dialog";
 
 export default function Editor() {
 	const params = useParams();
@@ -51,6 +53,7 @@ export default function Editor() {
 						<EditorLayout />
 					</div>
 					<MigrationDialog />
+					<RelinkDialog projectId={projectId} />
 				</div>
 			</EditorProvider>
 		</MobileGate>
@@ -87,13 +90,17 @@ const EXPANDED_PREVIEW_TOOLS_SIZE = 22;
 // — beside the timeline too, not just the tools panel above it. This is how
 // much of the app's width it claims.
 const EXPANDED_PREVIEW_RIGHT_WIDTH = 38;
-// Percentage-point reduction applied to the tools column when the sidebar
-// rail collapses — an approximation of the ~132px (188px → 56px) it frees,
-// expressed as a share of the panel group rather than a fixed pixel width
-// (which the resizable-panels library doesn't work in). Collapsing must
-// actually hand this space to the preview, not just reshuffle the tools
-// column's own internal split (PART 3, item 26).
-const SIDEBAR_COLLAPSE_SIZE_DELTA = 7;
+// How much of the panel group width the whole tools column (icon rail +
+// tool panel) keeps once collapsed — just enough for the icon-only rail,
+// with the rest handed back to the Preview panel. Collapsing must shrink
+// the entire column, not just the rail's own internal split, or the tool
+// panel content stays rendered at full width for nothing (see AssetsPanel,
+// which hides — not unmounts — its content panel in lockstep with this).
+const TOOLS_COLLAPSED_SIZE = 4;
+// How much of the panel group width the Inspector keeps when collapsed —
+// just enough for the slim "expand" strip, with the rest handed straight to
+// the Preview panel (item 31/1: collapsing must actually free the space).
+const INSPECTOR_COLLAPSED_SIZE = 3;
 
 function EditorLayout() {
 	usePasteMedia();
@@ -114,8 +121,11 @@ function EditorLayout() {
 	// never gets compressed back down by it (PART 2, item 15).
 	const showInspector = selectedElements.length > 0 && !isExpandedPreview;
 	const toolsPanelRef = useRef<ImperativePanelHandle>(null);
+	const propertiesPanelRef = useRef<ImperativePanelHandle>(null);
 	const isProgrammaticResizeRef = useRef(false);
 	const savedToolsSizeRef = useRef<number | null>(null);
+	const savedPropertiesSizeRef = useRef<number | null>(null);
+	const inspectorCollapsed = usePropertiesStore((s) => s.inspectorCollapsed);
 
 	// Expanded-preview and sidebar-collapsed each want to programmatically
 	// shrink the tools panel to free space for the preview — combined here so
@@ -138,9 +148,7 @@ function EditorLayout() {
 			const base = isExpandedPreview
 				? EXPANDED_PREVIEW_TOOLS_SIZE
 				: savedToolsSizeRef.current;
-			const target = sidebarCollapsed
-				? Math.max(4, base - SIDEBAR_COLLAPSE_SIZE_DELTA)
-				: base;
+			const target = sidebarCollapsed ? TOOLS_COLLAPSED_SIZE : base;
 			toolsPanel.resize(target);
 		} else if (savedToolsSizeRef.current !== null) {
 			toolsPanel.resize(savedToolsSizeRef.current);
@@ -152,6 +160,32 @@ function EditorLayout() {
 		return () => cancelAnimationFrame(releaseGuard);
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [isExpandedPreview, sidebarCollapsed]);
+
+	// Same collapse-and-restore mechanism as the tools panel above, applied to
+	// the Inspector: collapsing shrinks it down to a slim strip and hands the
+	// freed width straight to the Preview panel; expanding restores the size
+	// the user had before. Reuses the same programmatic-resize guard so this
+	// doesn't get persisted as the user's real saved width.
+	useEffect(() => {
+		const propertiesPanel = propertiesPanelRef.current;
+		if (!propertiesPanel || !showInspector) return;
+
+		isProgrammaticResizeRef.current = true;
+		if (inspectorCollapsed) {
+			if (savedPropertiesSizeRef.current === null) {
+				savedPropertiesSizeRef.current = panels.properties;
+			}
+			propertiesPanel.resize(INSPECTOR_COLLAPSED_SIZE);
+		} else if (savedPropertiesSizeRef.current !== null) {
+			propertiesPanel.resize(savedPropertiesSizeRef.current);
+			savedPropertiesSizeRef.current = null;
+		}
+		const releaseGuard = requestAnimationFrame(() => {
+			isProgrammaticResizeRef.current = false;
+		});
+		return () => cancelAnimationFrame(releaseGuard);
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [inspectorCollapsed, showInspector]);
 	const activeScene = useEditor((editor) =>
 		editor.scenes.getActiveSceneOrNull(),
 	);
@@ -303,9 +337,9 @@ function EditorLayout() {
 					<ResizablePanel
 						ref={toolsPanelRef}
 						defaultSize={panels.tools}
-						minSize={8}
+						minSize={TOOLS_COLLAPSED_SIZE}
 						maxSize={40}
-						className="min-w-0"
+						className="min-w-0 transition-[flex-grow,flex-basis] duration-150 ease-out"
 					>
 						<AssetsPanel />
 					</ResizablePanel>
@@ -317,7 +351,7 @@ function EditorLayout() {
 							showInspector ? panels.preview : panels.preview + panels.properties
 						}
 						minSize={30}
-						className="min-h-0 min-w-0 flex-1"
+						className="min-h-0 min-w-0 flex-1 transition-[flex-grow,flex-basis] duration-150 ease-out"
 					>
 						<PreviewPanel
 							overlayControls={overlayControls}
@@ -331,10 +365,11 @@ function EditorLayout() {
 							<ResizableHandle withHandle />
 
 							<ResizablePanel
+								ref={propertiesPanelRef}
 								defaultSize={panels.properties}
-								minSize={8}
+								minSize={INSPECTOR_COLLAPSED_SIZE}
 								maxSize={40}
-								className="min-w-0"
+								className="min-w-0 transition-[flex-grow,flex-basis] duration-150 ease-out"
 							>
 								<div className="animate-in fade-in h-full duration-150">
 									<PropertiesPanel />

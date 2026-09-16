@@ -9,6 +9,8 @@ use crate::{EffectPass, UniformValue};
 
 const GAUSSIAN_BLUR_SHADER_ID: &str = "gaussian-blur";
 const GAUSSIAN_BLUR_SHADER_SOURCE: &str = include_str!("shaders/gaussian_blur.wgsl");
+const CHROMA_KEY_SHADER_ID: &str = "chroma-key";
+const CHROMA_KEY_SHADER_SOURCE: &str = include_str!("shaders/chroma_key.wgsl");
 
 pub struct ApplyEffectsOptions<'a> {
     pub source: &'a wgpu::Texture,
@@ -52,6 +54,14 @@ struct EffectUniformBuffer {
     scalars: [f32; 4],
 }
 
+#[repr(C)]
+#[derive(Clone, Copy, Pod, Zeroable)]
+struct ChromaKeyUniformBuffer {
+    key_color_and_similarity: [f32; 4],
+    softness_feather_spill_opacity: [f32; 4],
+    resolution: [f32; 4],
+}
+
 impl EffectPipeline {
     pub fn new(context: &GpuContext) -> Self {
         let uniform_bind_group_layout =
@@ -83,6 +93,13 @@ impl EffectPipeline {
                 .create_shader_module(wgpu::ShaderModuleDescriptor {
                     label: Some("effects-gaussian-blur-shader"),
                     source: wgpu::ShaderSource::Wgsl(GAUSSIAN_BLUR_SHADER_SOURCE.into()),
+                });
+        let chroma_key_shader_module =
+            context
+                .device()
+                .create_shader_module(wgpu::ShaderModuleDescriptor {
+                    label: Some("effects-chroma-key-shader"),
+                    source: wgpu::ShaderSource::Wgsl(CHROMA_KEY_SHADER_SOURCE.into()),
                 });
         let pipeline_layout =
             context
@@ -131,8 +148,46 @@ impl EffectPipeline {
                     multiview_mask: None,
                     cache: None,
                 });
-        let pipelines =
-            HashMap::from([(GAUSSIAN_BLUR_SHADER_ID.to_string(), gaussian_blur_pipeline)]);
+        let chroma_key_pipeline =
+            context
+                .device()
+                .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                    label: Some("effects-chroma-key-pipeline"),
+                    layout: Some(&pipeline_layout),
+                    vertex: wgpu::VertexState {
+                        module: &vertex_shader_module,
+                        entry_point: Some("vertex_main"),
+                        buffers: &[wgpu::VertexBufferLayout {
+                            array_stride: std::mem::size_of::<[f32; 2]>() as u64,
+                            step_mode: wgpu::VertexStepMode::Vertex,
+                            attributes: &[wgpu::VertexAttribute {
+                                format: wgpu::VertexFormat::Float32x2,
+                                offset: 0,
+                                shader_location: 0,
+                            }],
+                        }],
+                        compilation_options: wgpu::PipelineCompilationOptions::default(),
+                    },
+                    fragment: Some(wgpu::FragmentState {
+                        module: &chroma_key_shader_module,
+                        entry_point: Some("fragment_main"),
+                        targets: &[Some(wgpu::ColorTargetState {
+                            format: context.texture_format(),
+                            blend: None,
+                            write_mask: wgpu::ColorWrites::ALL,
+                        })],
+                        compilation_options: wgpu::PipelineCompilationOptions::default(),
+                    }),
+                    primitive: wgpu::PrimitiveState::default(),
+                    depth_stencil: None,
+                    multisample: wgpu::MultisampleState::default(),
+                    multiview_mask: None,
+                    cache: None,
+                });
+        let pipelines = HashMap::from([
+            (GAUSSIAN_BLUR_SHADER_ID.to_string(), gaussian_blur_pipeline),
+            (CHROMA_KEY_SHADER_ID.to_string(), chroma_key_pipeline),
+        ]);
 
         Self {
             uniform_bind_group_layout,
@@ -206,12 +261,13 @@ impl EffectPipeline {
                             },
                         ],
                     });
+            let uniform_bytes = pack_effect_uniforms(pass, width, height)?;
             let uniform_buffer =
                 context
                     .device()
                     .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                         label: Some("effects-uniform-buffer"),
-                        contents: bytemuck::bytes_of(&pack_effect_uniforms(pass, width, height)?),
+                        contents: &uniform_bytes,
                         usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
                     });
             let uniform_bind_group =
@@ -262,7 +318,29 @@ impl EffectPipeline {
     }
 }
 
+/// Every effect shader packs its own uniform layout — dispatched here by
+/// shader id, since different effects need genuinely different uniform
+/// shapes (a blur's direction/sigma vs. a chroma key's color/thresholds),
+/// rather than forcing everything through one fixed struct.
 fn pack_effect_uniforms(
+    pass: &EffectPass,
+    width: u32,
+    height: u32,
+) -> Result<Vec<u8>, EffectsError> {
+    match pass.shader.as_str() {
+        GAUSSIAN_BLUR_SHADER_ID => {
+            Ok(bytemuck::bytes_of(&pack_gaussian_blur_uniforms(pass, width, height)?).to_vec())
+        }
+        CHROMA_KEY_SHADER_ID => {
+            Ok(bytemuck::bytes_of(&pack_chroma_key_uniforms(pass, width, height)?).to_vec())
+        }
+        other => Err(EffectsError::UnknownEffectShader {
+            shader: other.to_string(),
+        }),
+    }
+}
+
+fn pack_gaussian_blur_uniforms(
     pass: &EffectPass,
     width: u32,
     height: u32,
@@ -286,6 +364,45 @@ fn pack_effect_uniforms(
         resolution: [width as f32, height as f32],
         direction,
         scalars: [sigma, step, 0.0, 0.0],
+    })
+}
+
+const CHROMA_KEY_UNIFORM_NAMES: [&str; 6] = [
+    "u_key_color",
+    "u_similarity",
+    "u_softness",
+    "u_feather",
+    "u_spill",
+    "u_opacity",
+];
+
+fn pack_chroma_key_uniforms(
+    pass: &EffectPass,
+    width: u32,
+    height: u32,
+) -> Result<ChromaKeyUniformBuffer, EffectsError> {
+    let shader = pass.shader.as_str();
+    let key_color = read_vec3_uniform(pass, "u_key_color")?;
+    let similarity = read_number_uniform(pass, "u_similarity")?;
+    let softness = read_number_uniform(pass, "u_softness")?;
+    let feather = read_number_uniform(pass, "u_feather")?;
+    let spill = read_number_uniform(pass, "u_spill")?;
+    let opacity = read_number_uniform(pass, "u_opacity")?;
+
+    for uniform in pass.uniforms.keys() {
+        if CHROMA_KEY_UNIFORM_NAMES.contains(&uniform.as_str()) {
+            continue;
+        }
+        return Err(EffectsError::UnsupportedUniform {
+            shader: shader.to_string(),
+            uniform: uniform.clone(),
+        });
+    }
+
+    Ok(ChromaKeyUniformBuffer {
+        key_color_and_similarity: [key_color[0], key_color[1], key_color[2], similarity],
+        softness_feather_spill_opacity: [softness, feather, spill, opacity],
+        resolution: [width as f32, height as f32, 0.0, 0.0],
     })
 }
 
@@ -327,4 +444,28 @@ fn read_vec2_uniform(pass: &EffectPass, uniform: &str) -> Result<[f32; 2], Effec
         });
     }
     Ok([values[0], values[1]])
+}
+
+fn read_vec3_uniform(pass: &EffectPass, uniform: &str) -> Result<[f32; 3], EffectsError> {
+    let Some(value) = pass.uniforms.get(uniform) else {
+        return Err(EffectsError::MissingUniform {
+            shader: pass.shader.clone(),
+            uniform: uniform.to_string(),
+        });
+    };
+    let UniformValue::Vector(values) = value else {
+        return Err(EffectsError::InvalidVectorUniform {
+            shader: pass.shader.clone(),
+            uniform: uniform.to_string(),
+            expected_length: 3,
+        });
+    };
+    if values.len() != 3 {
+        return Err(EffectsError::InvalidVectorUniform {
+            shader: pass.shader.clone(),
+            uniform: uniform.to_string(),
+            expected_length: 3,
+        });
+    }
+    Ok([values[0], values[1], values[2]])
 }

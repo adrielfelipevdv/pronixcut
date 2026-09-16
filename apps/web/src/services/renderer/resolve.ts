@@ -17,8 +17,18 @@ import {
 	getTextMeasurementContext,
 	measureTextElement,
 } from "@/text/measure-element";
+import {
+	buildInstagramQuestionStyleFromParams,
+	measureInstagramQuestionCard,
+} from "@/stickers/instagram-question/card";
 import { resolveColorAtTime, resolveOpacityAtTime } from "@/animation/values";
 import { resolveTransformAtTime } from "@/rendering/animation-values";
+import type { Transform } from "@/rendering";
+import {
+	computeActiveWordIndex,
+	readWordHighlightStyleFromParams,
+} from "@/text/word-highlight";
+import type { TextElement } from "@/timeline";
 import { videoCache } from "@/services/video-cache/service";
 import type { CanvasRenderer } from "./canvas-renderer";
 import type { AnyBaseNode } from "./nodes/base-node";
@@ -38,6 +48,10 @@ import {
 import { ImageNode, loadImageSource } from "./nodes/image-node";
 import { StickerNode, loadStickerSource } from "./nodes/sticker-node";
 import { TextNode, type ResolvedTextNodeState } from "./nodes/text-node";
+import {
+	InstagramQuestionNode,
+	type ResolvedInstagramQuestionNodeState,
+} from "./nodes/instagram-question-node";
 import { VideoNode } from "./nodes/video-node";
 import type {
 	ResolvedVisualNodeState,
@@ -85,6 +99,8 @@ async function resolveNode({
 		node.resolved = resolveGraphicNode({ node, context });
 	} else if (node instanceof TextNode) {
 		node.resolved = resolveTextNode({ node, context });
+	} else if (node instanceof InstagramQuestionNode) {
+		node.resolved = resolveInstagramQuestionNode({ node, context });
 	} else if (node instanceof BlurBackgroundNode) {
 		node.resolved = await resolveBlurBackgroundNode({ node, context });
 	} else if (node instanceof EffectLayerNode) {
@@ -157,6 +173,33 @@ function resolveCanvas2DEffects({
 		}));
 }
 
+/**
+ * `position.x/y` is stored in absolute pixels authored against the project's
+ * full canvas resolution. When the Viewer renders at a reduced "Qualidade da
+ * pré-visualização" (`renderer.width/height` smaller than the project's real
+ * canvasSize), that stored offset must be scaled down the same way so the
+ * element still lands in the equivalent relative spot on the smaller render
+ * target — otherwise it'd drift toward/off the edge as quality changes.
+ * `scaleX/scaleY`/`rotate`/`anchor`/flip are unaffected: scale and rotation
+ * are already relative, and anchor is normalized 0..1.
+ */
+function applyCoordinateScale({
+	transform,
+	coordinateScale,
+}: {
+	transform: Transform;
+	coordinateScale: number;
+}): Transform {
+	if (coordinateScale === 1) return transform;
+	return {
+		...transform,
+		position: {
+			x: transform.position.x * coordinateScale,
+			y: transform.position.y * coordinateScale,
+		},
+	};
+}
+
 function resolveVisualState({
 	params,
 	context,
@@ -178,10 +221,13 @@ function resolveVisualState({
 		elementStartTime: params.timeOffset,
 		elementDuration: params.duration,
 	});
-	const transform = resolveTransformAtTime({
-		baseTransform: params.transform,
-		animations: params.animations,
-		localTime,
+	const transform = applyCoordinateScale({
+		transform: resolveTransformAtTime({
+			baseTransform: params.transform,
+			animations: params.animations,
+			localTime,
+		}),
+		coordinateScale: context.renderer.coordinateScale,
 	});
 	const opacity = resolveOpacityAtTime({
 		baseOpacity: params.opacity,
@@ -346,6 +392,34 @@ function resolveGraphicNode({
 	};
 }
 
+function resolveWordHighlightState({
+	element,
+	localTime,
+}: {
+	element: TextElement;
+	localTime: number;
+}): ResolvedTextNodeState["wordHighlight"] {
+	const style = readWordHighlightStyleFromParams({ params: element.params });
+	if (!style.enabled || !element.words || element.words.length === 0) {
+		return null;
+	}
+
+	const activeWordIndex = computeActiveWordIndex({
+		words: element.words,
+		localTime,
+	});
+	if (activeWordIndex === -1) {
+		return { activeWordIndex: -1, activeWordProgress: 0 };
+	}
+
+	const activeWord = element.words[activeWordIndex];
+	const span = activeWord.end - activeWord.start;
+	const activeWordProgress =
+		span > 0 ? Math.max(0, Math.min(1, (localTime - activeWord.start) / span)) : 1;
+
+	return { activeWordIndex, activeWordProgress };
+}
+
 function resolveTextNode({
 	node,
 	context,
@@ -368,10 +442,13 @@ function resolveTextNode({
 	const background = buildTextBackgroundFromElement({ element: node.params });
 
 	return {
-		transform: resolveTransformAtTime({
-			baseTransform: node.params.transform,
-			animations: node.params.animations,
-			localTime,
+		transform: applyCoordinateScale({
+			transform: resolveTransformAtTime({
+				baseTransform: node.params.transform,
+				animations: node.params.animations,
+				localTime,
+			}),
+			coordinateScale: context.renderer.coordinateScale,
 		}),
 		opacity: resolveOpacityAtTime({
 			baseOpacity: node.params.opacity,
@@ -406,6 +483,76 @@ function resolveTextNode({
 			localTime,
 			ctx: getTextMeasurementContext(),
 		}),
+		strokeEnabled:
+			typeof node.params.params["stroke.enabled"] === "boolean"
+				? (node.params.params["stroke.enabled"] as boolean)
+				: false,
+		strokeColor:
+			typeof node.params.params["stroke.color"] === "string"
+				? (node.params.params["stroke.color"] as string)
+				: "#000000",
+		strokeWidth:
+			(typeof node.params.params["stroke.width"] === "number"
+				? (node.params.params["stroke.width"] as number)
+				: 6) * context.renderer.coordinateScale,
+		wordHighlight: resolveWordHighlightState({
+			element: node.params,
+			localTime,
+		}),
+	};
+}
+
+function resolveInstagramQuestionNode({
+	node,
+	context,
+}: {
+	node: InstagramQuestionNode;
+	context: ResolveContext;
+}): ResolvedInstagramQuestionNodeState | null {
+	if (
+		context.time < node.params.startTime ||
+		context.time >= node.params.startTime + node.params.duration
+	) {
+		return null;
+	}
+
+	const localTime = getElementLocalTime({
+		timelineTime: context.time,
+		elementStartTime: node.params.startTime,
+		elementDuration: node.params.duration,
+	});
+
+	const style = buildInstagramQuestionStyleFromParams({ params: node.params.params });
+	const measured = measureInstagramQuestionCard({
+		style,
+		canvasHeight: node.params.canvasHeight,
+		ctx: getTextMeasurementContext(),
+	});
+
+	return {
+		transform: applyCoordinateScale({
+			transform: resolveTransformAtTime({
+				baseTransform: node.params.transform,
+				animations: node.params.animations,
+				localTime,
+			}),
+			coordinateScale: context.renderer.coordinateScale,
+		}),
+		opacity: resolveOpacityAtTime({
+			baseOpacity: node.params.opacity,
+			animations: node.params.animations,
+			localTime,
+		}),
+		// Card colors aren't in the global keyframable-color-path whitelist
+		// (animation/types.ts's AnimationColorPropertyPath) — read directly,
+		// same as text's stroke color, which is likewise static-only today.
+		headerBgColor: style.headerBgColor,
+		bodyBgColor: style.bodyBgColor,
+		headerTextColor: style.headerColor,
+		questionTextColor: style.questionColor,
+		shadow: style.shadow,
+		effectPasses: [],
+		measured,
 	};
 }
 

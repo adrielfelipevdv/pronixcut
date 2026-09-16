@@ -23,6 +23,8 @@ import type {
 } from "@/project/types";
 import { formatTimecode, mediaTimeToSeconds } from "opencut-wasm";
 import { formatDate } from "@/utils/date";
+import { openProjectFile } from "@/project-file/open";
+import { useRelinkStore } from "@/project-file/relink-store";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
 	Breadcrumb,
@@ -34,6 +36,7 @@ import {
 } from "@/components/ui/breadcrumb";
 import {
 	Calendar04Icon,
+	FolderOpenIcon,
 	GridViewIcon,
 	LeftToRightListDashIcon,
 	PlusSignIcon,
@@ -189,6 +192,7 @@ function ProjectsHeader() {
 
 				<div className="flex items-center gap-3 md:gap-4">
 					<SearchBar className="hidden md:block" />
+					<OpenProjectButton />
 					<NewProjectButton />
 				</div>
 			</div>
@@ -506,6 +510,41 @@ function SortDropdown({ children }: { children: React.ReactNode }) {
 				</DropdownMenuCheckboxItem>
 			</DropdownMenuContent>
 		</DropdownMenu>
+	);
+}
+
+function OpenProjectButton() {
+	const router = useRouter();
+	const setMissing = useRelinkStore((s) => s.setMissing);
+	const [isOpening, setIsOpening] = useState(false);
+
+	const handleOpenProject = async () => {
+		if (isOpening) return;
+		setIsOpening(true);
+		try {
+			const result = await openProjectFile();
+			if (!result.success || !result.projectId) return;
+
+			if (result.missingMedia && result.missingMedia.length > 0) {
+				setMissing({ projectId: result.projectId, entries: result.missingMedia });
+			}
+			router.push(`/editor/${result.projectId}`);
+		} finally {
+			setIsOpening(false);
+		}
+	};
+
+	return (
+		<Button
+			size="lg"
+			variant="outline"
+			className="flex gap-1.5 px-5 md:px-6"
+			onClick={handleOpenProject}
+			disabled={isOpening}
+		>
+			<HugeiconsIcon icon={FolderOpenIcon} className="size-4" />
+			<span className="text-sm font-medium hidden md:block">Abrir projeto</span>
+		</Button>
 	);
 }
 

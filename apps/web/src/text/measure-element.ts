@@ -4,6 +4,10 @@ import type { TextElement } from "@/timeline";
 import type { TextBackground } from "@/text/background";
 import { resolveNumberAtTime } from "@/animation/values";
 import {
+	buildWordHighlightContent,
+	readWordHighlightStyleFromParams,
+} from "./word-highlight";
+import {
 	getTextVisualRect,
 } from "./layout";
 import {
@@ -134,12 +138,24 @@ export function buildTextLayoutParamsFromElement({
 }: {
 	element: TextElement;
 }): TextLayoutParams {
+	const wordHighlightStyle = readWordHighlightStyleFromParams({
+		params: element.params,
+	});
+	const words = element.words;
+
 	return {
-		content: readStringParam({
-			params: element.params,
-			key: "content",
-			fallback: "Default text",
-		}),
+		content:
+			wordHighlightStyle.enabled && words && words.length > 0
+				? buildWordHighlightContent({
+						words,
+						maxWordsPerLine: wordHighlightStyle.maxWordsPerLine,
+						uppercase: wordHighlightStyle.uppercase,
+					})
+				: readStringParam({
+						params: element.params,
+						key: "content",
+						fallback: "Default text",
+					}),
 		fontSize: readNumberParam({
 			params: element.params,
 			key: "fontSize",

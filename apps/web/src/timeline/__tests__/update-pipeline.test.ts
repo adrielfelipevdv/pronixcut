@@ -10,6 +10,9 @@ function buildTransform(): Transform {
 		scaleY: 1,
 		position: { x: 0, y: 0 },
 		rotate: 0,
+		anchor: { x: 0.5, y: 0.5 },
+		flipHorizontal: false,
+		flipVertical: false,
 	};
 }
 

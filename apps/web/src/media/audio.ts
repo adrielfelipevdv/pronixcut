@@ -752,6 +752,32 @@ export async function createTimelineAudioBuffer({
 	return await applyAudioMasteringToBuffer({ audioBuffer: outputBuffer });
 }
 
+/** Averages all channels down to a single mono channel — used when the export's "Canais" option is set to Mono. */
+export function downmixAudioBufferToMono({
+	buffer,
+}: {
+	buffer: AudioBuffer;
+}): AudioBuffer {
+	if (buffer.numberOfChannels === 1) return buffer;
+
+	const mono = new AudioBuffer({
+		length: buffer.length,
+		numberOfChannels: 1,
+		sampleRate: buffer.sampleRate,
+	});
+
+	const monoData = mono.getChannelData(0);
+	const channelCount = buffer.numberOfChannels;
+	for (let channel = 0; channel < channelCount; channel++) {
+		const channelData = buffer.getChannelData(channel);
+		for (let i = 0; i < buffer.length; i++) {
+			monoData[i] += channelData[i] / channelCount;
+		}
+	}
+
+	return mono;
+}
+
 function collectPeakRange({
 	buffer,
 	count,

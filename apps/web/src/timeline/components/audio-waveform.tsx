@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useCommittedRef } from "@/hooks/use-committed-ref";
 import { useResizeObserver } from "@/hooks/use-resize-observer";
 import { TIMELINE_AUDIO_WAVEFORM_COLOR } from "./theme";
@@ -87,6 +87,21 @@ export function AudioWaveform({
 	const scrollParentRef = useRef<HTMLElement | null>(null);
 	const heightRef = useRef<number>(0);
 	const lastRenderSignatureRef = useRef<string | null>(null);
+	// Purely a "what to show instead of bars" flag — never touched during
+	// playback/scrub, so it can safely be React state without risking
+	// re-renders on the hot path (see item 25/26: peaks/drawing stay in refs).
+	const [status, setStatus] = useState<"loading" | "ready" | "error">(
+		"loading",
+	);
+	// Reset to "loading" the moment the source identity changes, without a
+	// setState-in-effect waterfall — adjusting state during render in
+	// response to a prop change is the pattern React itself recommends for
+	// this (https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes).
+	const [statusSourceKey, setStatusSourceKey] = useState(sourceKey);
+	if (statusSourceKey !== sourceKey) {
+		setStatusSourceKey(sourceKey);
+		setStatus("loading");
+	}
 
 	const clearCanvas = useCallback(() => {
 		const canvas = canvasRef.current;
@@ -106,9 +121,27 @@ export function AudioWaveform({
 		const container = containerRef.current;
 		const canvas = canvasRef.current;
 		const summary = summaryRef.current;
-		const height = heightRef.current;
 
-		if (!container || !canvas || !summary || height <= 0) {
+		if (!container || !canvas || !summary) {
+			clearCanvas();
+			return;
+		}
+
+		// The async waveform decode can resolve before the ResizeObserver's
+		// first callback lands (it fires on the next frame, not synchronously
+		// on mount) — without this fallback, that race permanently leaves the
+		// canvas at its browser-default 300x150 size with nothing drawn,
+		// because heightRef.current was still 0 the one time drawVisible() ran
+		// with real summary data. Measuring the live layout here means the
+		// very first draw always has a real height to work with, regardless of
+		// which of the two async sources (decode vs. resize) wins the race.
+		let height = heightRef.current;
+		if (height <= 0) {
+			height = container.getBoundingClientRect().height;
+			heightRef.current = height;
+		}
+
+		if (height <= 0) {
 			clearCanvas();
 			return;
 		}
@@ -297,13 +330,19 @@ export function AudioWaveform({
 					return;
 				}
 				summaryRef.current = summary;
+				setStatus("ready");
 				drawVisible();
 			})
-			.catch(() => {
+			.catch((error) => {
 				// Waveform loading failed (e.g. corrupt file, unsupported format).
-				// Fail silently — a missing waveform is preferable to an error state.
+				// The canvas itself stays silently blank either way — a broken
+				// waveform must never take the timeline down with it — but a
+				// discreet label distinguishes "still decoding" from "gave up",
+				// which a plain empty canvas can't (item 29/30).
+				console.error("Failed to build waveform summary", error);
 				if (!isCancelled) {
 					clearCanvas();
+					setStatus("error");
 				}
 			});
 
@@ -365,6 +404,22 @@ export function AudioWaveform({
 	return (
 		<div ref={containerRef} className={cn("relative size-full", className)}>
 			<canvas ref={canvasRef} className="absolute bottom-0" />
+			{status !== "ready" && (
+				<div className="pointer-events-none absolute inset-0 flex items-center justify-center overflow-hidden px-1.5">
+					<span
+						className={cn(
+							"truncate text-[9px] leading-none whitespace-nowrap",
+							status === "loading"
+								? "text-white/40"
+								: "text-white/35 italic",
+						)}
+					>
+						{status === "loading"
+							? "Gerando forma de onda…"
+							: "Forma de onda indisponível"}
+					</span>
+				</div>
+			)}
 		</div>
 	);
 }

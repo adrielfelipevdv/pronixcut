@@ -4,7 +4,6 @@ import { Button } from "../ui/button";
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ExportButton } from "./export-button";
-import { FeedbackPopover } from "@/feedback/components/feedback-popover";
 import { ThemeToggle } from "../theme-toggle";
 import { toast } from "sonner";
 import { useEditor } from "@/editor/use-editor";
@@ -18,6 +17,14 @@ import {
 } from "@hugeicons/core-free-icons";
 import { ShortcutsDialog } from "@/actions/components/shortcuts-dialog";
 import { AboutPopover } from "@/updater/components/about-popover";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { invokeAction } from "@/actions";
+import { FloppyDiskIcon } from "@hugeicons/core-free-icons";
 
 export function EditorHeader() {
 	return (
@@ -36,7 +43,6 @@ export function EditorHeader() {
 				<HistoryControls />
 				<span className="bg-border mx-1.5 h-6 w-px" />
 				<ShortcutsButton />
-				<FeedbackPopover />
 				<ExportButton />
 				<ThemeToggle />
 				<AboutPopover />
@@ -68,15 +74,33 @@ function SaveStatus() {
 	const isDirty = useEditor((e) => e.save.getIsDirty());
 
 	return (
-		<span className="text-subtle ml-1 hidden items-center gap-1.5 text-[12px] select-none md:flex">
-			<span
-				className={cn(
-					"size-1.5 rounded-full transition-colors duration-200",
-					isDirty ? "bg-subtle" : "bg-success",
-				)}
-			/>
-			{isDirty ? "Salvando…" : "Salvo automaticamente"}
-		</span>
+		<DropdownMenu>
+			<DropdownMenuTrigger asChild>
+				<button
+					type="button"
+					className="text-subtle hover:bg-accent hover:text-foreground ml-1 hidden cursor-pointer items-center gap-1.5 rounded-md px-1.5 py-1 text-[12px] transition-colors duration-150 select-none md:flex"
+				>
+					<span
+						className={cn(
+							"size-1.5 rounded-full transition-colors duration-200",
+							isDirty ? "bg-subtle" : "bg-success",
+						)}
+					/>
+					{isDirty ? "Salvando…" : "Salvo automaticamente"}
+				</button>
+			</DropdownMenuTrigger>
+			<DropdownMenuContent align="start">
+				<DropdownMenuItem onClick={() => invokeAction("save-project")}>
+					<HugeiconsIcon icon={FloppyDiskIcon} className="size-3.5" />
+					Salvar projeto
+					<span className="text-muted-foreground ml-auto text-xs">Ctrl+S</span>
+				</DropdownMenuItem>
+				<DropdownMenuItem onClick={() => invokeAction("save-project-as")}>
+					Salvar projeto como…
+					<span className="text-muted-foreground ml-auto text-xs">Ctrl+Shift+S</span>
+				</DropdownMenuItem>
+			</DropdownMenuContent>
+		</DropdownMenu>
 	);
 }
 

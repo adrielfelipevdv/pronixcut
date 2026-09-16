@@ -75,7 +75,13 @@ export function TabBar() {
 									key={tabKey}
 									type="button"
 									aria-label={tab.label}
-									onClick={() => setActiveTab(tabKey)}
+									onClick={() => {
+										setActiveTab(tabKey);
+										// Clicking a tool while the whole sidebar is collapsed
+										// should just open it — a user shouldn't have to expand
+										// first and pick the tool as two separate steps.
+										if (collapsed) toggleCollapsed();
+									}}
 									className={cn(
 										"flex h-10 shrink-0 items-center gap-2.5 rounded-md border-l-2 border-transparent text-left text-[13px] font-medium transition-colors duration-150",
 										collapsed ? "justify-center px-0" : "pl-2.5 pr-2",
