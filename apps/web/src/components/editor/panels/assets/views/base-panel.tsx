@@ -32,13 +32,16 @@ export function PanelView({
 			{...rest}
 		>
 			{!hideHeader && (
-				<div className="bg-background border-border flex h-11 shrink-0 items-center justify-between border-b pr-2 pl-3">
+				<div className="bg-background border-border flex h-11 shrink-0 items-center justify-between gap-2 border-b pr-2 pl-3">
 					{title && (
-						<span className="text-foreground text-[15px] font-semibold">
+						<span className="text-foreground min-w-0 flex-1 truncate text-[15px] font-semibold">
 							{title}
 						</span>
 					)}
-					{actions}
+					{/* Actions (Importar, diagnostic buttons, etc.) must never get
+					    clipped by a long title at a narrow panel width — the title
+					    truncates first (see its `truncate` above), not this. */}
+					{actions && <div className="flex shrink-0 items-center">{actions}</div>}
 				</div>
 			)}
 			<div

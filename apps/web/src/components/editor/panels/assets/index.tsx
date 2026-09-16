@@ -40,7 +40,21 @@ export function AssetsPanel() {
 			 * expand cycle — see stores/panel-store persistence for the actual
 			 * width change (EditorLayout's TOOLS_COLLAPSED_SIZE).
 			 */}
-			<div className={cn("flex flex-1 overflow-hidden", sidebarCollapsed && "hidden")}>
+			<div
+				className={cn(
+					// A hard floor on the actual tool-panel content (Legendas'
+					// caption blocks, Ajustes, etc.) — the surrounding
+					// ResizablePanel's drag handle is percentage-based (see
+					// page.tsx's TOOLS_COLLAPSED_SIZE) and can otherwise be
+					// dragged down to a width these panels' layouts genuinely
+					// can't work in (buttons/labels colliding, not just small
+					// text). Below this, the Preview panel gives up space
+					// instead. Only applies when expanded — `hidden` above
+					// still lets the collapsed icon rail go narrower.
+					"min-w-[280px] flex-1 overflow-hidden",
+					sidebarCollapsed && "hidden",
+				)}
+			>
 				<Separator orientation="vertical" className="bg-border" />
 				<div className="flex-1 overflow-hidden">{viewMap[activeTab]}</div>
 			</div>

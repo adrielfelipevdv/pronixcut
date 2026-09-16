@@ -15,7 +15,6 @@ import { VISUAL_ELEMENT_TYPES } from "@/timeline";
 import type { EffectDefinition } from "@/effects/types";
 import type { ParamValues } from "@/params";
 import { buildDefaultParamValues } from "@/params/registry";
-import { usePropertiesStore } from "@/components/editor/panels/properties/stores/properties-store";
 import { CHROMA_KEY_EFFECT_TYPE } from "@/effects/definitions/chroma-key";
 import { presetToEffectParams } from "@/effects/color-grade/presets";
 import { COLOR_GRADE_EFFECT_TYPE } from "@/effects/color-grade/definition";
@@ -31,6 +30,8 @@ import {
 	ArrowExpandIcon,
 } from "@hugeicons/core-free-icons";
 import { BackgroundContent } from "@/components/editor/panels/assets/views/settings/background";
+import { TransformFields } from "@/components/editor/panels/properties/components/transform-fields";
+import type { VisualElement } from "@/timeline";
 import { cn } from "@/utils/ui";
 
 // Library navigation (hover, click-to-select, scrolling past cards) must
@@ -85,12 +86,7 @@ export function EffectsView() {
 					<h3 className="text-muted-foreground text-xs font-medium uppercase tracking-wide">
 						Resolve FX
 					</h3>
-					<div
-						className="grid gap-2"
-						style={{ gridTemplateColumns: "repeat(auto-fill, minmax(96px, 1fr))" }}
-					>
-						<ResolveFxTransformItem />
-					</div>
+					<ResolveFxTransformSection />
 				</section>
 
 				<section className="flex flex-col gap-2">
@@ -317,20 +313,19 @@ function applyClipEffect({
 
 // Transform (position/scale/rotation/anchor/opacity/flip) isn't a toggleable
 // effect — every visual clip already has it, fully keyframable, with its own
-// on-canvas handles (see TransformFields/use-transform-handles). This card
-// exists purely for discoverability: "Aplicar" jumps the Inspector straight
-// to that clip's "Ajustes" tab instead of duplicating the controls here.
-function ResolveFxTransformItem() {
+// on-canvas handles (see TransformFields/use-transform-handles). Rather than
+// a card whose "Aplicar" just jumped the user to a different panel (easy to
+// miss, and "apply" implied an on/off toggle that doesn't exist), this shows
+// the real, live-working controls right here once a compatible clip is
+// selected — no separate panel to find, nothing to "activate" first.
+function ResolveFxTransformSection() {
 	const editor = useEditor();
 	const { selectedElements } = useElementSelection();
-	const hasSelection = selectedElements.length > 0;
+	const [isExpanded, setIsExpanded] = useState(false);
 
-	const handleApply = useCallback(() => {
+	const resolved = (() => {
+		if (selectedElements.length !== 1) return null;
 		const selected = selectedElements[0];
-		if (!selected) {
-			toast.error("Selecione um clipe na timeline para editar a transformação");
-			return;
-		}
 		const track = findTrackInSceneTracks({
 			tracks: editor.scenes.getActiveScene().tracks,
 			trackId: selected.trackId,
@@ -340,37 +335,41 @@ function ResolveFxTransformItem() {
 			!element ||
 			!(VISUAL_ELEMENT_TYPES as readonly string[]).includes(element.type)
 		) {
-			toast.error("Esse clipe não tem controles de transformação");
-			return;
+			return null;
 		}
-		usePropertiesStore.getState().setActiveTab({
-			elementType: element.type,
-			tabId: "transform",
-		});
-		toast.success('Abra "Ajustes" no painel de Propriedades para editar a Transformação');
-	}, [editor, selectedElements]);
+		return { element: element as VisualElement, trackId: selected.trackId };
+	})();
+
+	if (!resolved) {
+		return (
+			<p className="text-muted-foreground text-xs">
+				Selecione um vídeo ou imagem na linha do tempo para usar Transformação.
+			</p>
+		);
+	}
 
 	return (
-		<div className="flex flex-col gap-1 rounded-md p-1">
-			<div className="bg-accent border-border relative flex aspect-square w-full items-center justify-center overflow-hidden rounded-sm border">
-				<HugeiconsIcon
-					icon={ArrowExpandIcon}
-					className="text-muted-foreground size-6"
-				/>
-			</div>
-			<span className="text-muted-foreground w-full truncate text-left text-[0.7rem]">
-				Transformação
-			</span>
-			<Button
-				size="sm"
-				variant="secondary"
-				className="h-6 gap-1 text-xs"
-				disabled={!hasSelection}
-				onClick={handleApply}
+		<div className="border-border flex flex-col gap-2 rounded-md border p-2">
+			<button
+				type="button"
+				className="flex items-center justify-between gap-2 text-left"
+				onClick={() => setIsExpanded((prev) => !prev)}
 			>
-				<HugeiconsIcon icon={CheckmarkCircle02Icon} className="size-3.5" />
-				Aplicar
-			</Button>
+				<span className="flex items-center gap-2 text-sm font-medium">
+					<HugeiconsIcon icon={ArrowExpandIcon} className="size-4" />
+					Transformação
+				</span>
+				<span className="text-primary text-xs">
+					{isExpanded ? "Recolher" : "Editar transformação"}
+				</span>
+			</button>
+			{isExpanded ? (
+				<TransformFields element={resolved.element} trackId={resolved.trackId} />
+			) : (
+				<p className="text-muted-foreground text-xs">
+					Mover, redimensionar, rotacionar e animar o clipe.
+				</p>
+			)}
 		</div>
 	);
 }

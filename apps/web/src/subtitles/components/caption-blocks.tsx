@@ -273,16 +273,33 @@ export function CaptionBlockEditor() {
 
 	return (
 		<Section collapsible defaultOpen sectionKey="captions:blocks">
-			<SectionHeader>
-				<SectionTitle className="flex-1">Blocos de legenda ({blocks.length})</SectionTitle>
-				<Button variant="outline" size="sm" onClick={handleFixWithAi} disabled={isRewriting}>
-					{isRewriting ? (
-						<Spinner className="size-3.5" />
-					) : (
-						<HugeiconsIcon icon={SparklesIcon} className="size-3.5" />
-					)}
-					Corrigir com IA
-				</Button>
+			<SectionHeader
+				actions={
+					// `actions` renders as a sibling of the collapsible header's own
+					// clickable button (see SectionHeader), not nested inside it —
+					// putting this button in `children` instead put a <button> inside
+					// that outer collapse-toggle <button>, which is invalid HTML and
+					// was the actual cause of the header's broken/overlapping layout,
+					// not a font-size or spacing issue.
+					<Button
+						variant="outline"
+						size="sm"
+						className="shrink-0"
+						onClick={handleFixWithAi}
+						disabled={isRewriting}
+					>
+						{isRewriting ? (
+							<Spinner className="size-3.5" />
+						) : (
+							<HugeiconsIcon icon={SparklesIcon} className="size-3.5" />
+						)}
+						Corrigir com IA
+					</Button>
+				}
+			>
+				<SectionTitle className="truncate">
+					Blocos de legenda ({blocks.length})
+				</SectionTitle>
 			</SectionHeader>
 			<SectionContent className="flex flex-col gap-2 px-2 pb-3">
 				{blocks.map((block, index) => (
@@ -295,19 +312,22 @@ export function CaptionBlockEditor() {
 							onChange={(event) => updateContent({ block, content: event.target.value })}
 							className="min-h-12 resize-none text-sm"
 						/>
-						<div className="flex flex-wrap items-center gap-1 text-xs">
-							<span className="text-muted-foreground">
-								{formatTime(mediaTimeToSeconds({ time: block.element.startTime }))} –{" "}
-								{formatTime(
-									mediaTimeToSeconds({
-										time: addMediaTime({ a: block.element.startTime, b: block.element.duration }),
-									}),
-								)}
-							</span>
+						<span className="text-muted-foreground text-xs">
+							{formatTime(mediaTimeToSeconds({ time: block.element.startTime }))} –{" "}
+							{formatTime(
+								mediaTimeToSeconds({
+									time: addMediaTime({ a: block.element.startTime, b: block.element.duration }),
+								}),
+							)}
+						</span>
+						{/* 2-column grid (Início/Fim × −/+) instead of one flex-wrap row —
+						    four buttons wrapping unpredictably at narrow panel widths is
+						    exactly what read as "comprimido" before. */}
+						<div className="grid grid-cols-2 gap-1 text-xs">
 							<Button
 								variant="ghost"
 								size="sm"
-								className="h-6 px-1.5"
+								className="h-6 min-w-0 px-1.5"
 								onClick={() => nudgeStart({ block, deltaSeconds: -NUDGE_SECONDS })}
 							>
 								Início −
@@ -315,7 +335,7 @@ export function CaptionBlockEditor() {
 							<Button
 								variant="ghost"
 								size="sm"
-								className="h-6 px-1.5"
+								className="h-6 min-w-0 px-1.5"
 								onClick={() => nudgeStart({ block, deltaSeconds: NUDGE_SECONDS })}
 							>
 								Início +
@@ -323,7 +343,7 @@ export function CaptionBlockEditor() {
 							<Button
 								variant="ghost"
 								size="sm"
-								className="h-6 px-1.5"
+								className="h-6 min-w-0 px-1.5"
 								onClick={() => nudgeEnd({ block, deltaSeconds: -NUDGE_SECONDS })}
 							>
 								Fim −
@@ -331,7 +351,7 @@ export function CaptionBlockEditor() {
 							<Button
 								variant="ghost"
 								size="sm"
-								className="h-6 px-1.5"
+								className="h-6 min-w-0 px-1.5"
 								onClick={() => nudgeEnd({ block, deltaSeconds: NUDGE_SECONDS })}
 							>
 								Fim +
