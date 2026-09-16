@@ -138,7 +138,17 @@ async function handleTranscribe({
 			chunk_length_s: DEFAULT_CHUNK_LENGTH_SECONDS,
 			stride_length_s: DEFAULT_STRIDE_SECONDS,
 			language: language === "auto" ? undefined : language,
-			return_timestamps: true,
+			// Word-level timestamps (one chunk per word) instead of whole-
+			// segment timestamps. Segment-level timestamps mark only where a
+			// sentence/phrase starts and ends, so caption.ts previously had to
+			// *guess* each word's position inside that span by linearly
+			// spreading word count over the segment's duration — which drifts
+			// badly whenever a segment contains a pause (breath, hesitation,
+			// silence) the model didn't split on. That drift is worse for
+			// non-English audio, where Whisper's segment boundaries are
+			// already looser than for English. Real per-word timestamps
+			// remove the guesswork entirely.
+			return_timestamps: "word",
 		});
 
 		if (cancelled) return;

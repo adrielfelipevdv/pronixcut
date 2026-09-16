@@ -67,23 +67,34 @@ export async function decodeAudioToFloat32({
 	sampleRate?: number;
 }): Promise<DecodedAudio> {
 	const audioContext = createAudioContext({ sampleRate });
-	const arrayBuffer = await audioBlob.arrayBuffer();
-	const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+	try {
+		const arrayBuffer = await audioBlob.arrayBuffer();
+		const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
 
-	// mix down to mono
-	const numChannels = audioBuffer.numberOfChannels;
-	const length = audioBuffer.length;
-	const samples = new Float32Array(length);
+		// mix down to mono
+		const numChannels = audioBuffer.numberOfChannels;
+		const length = audioBuffer.length;
+		const samples = new Float32Array(length);
 
-	for (let i = 0; i < length; i++) {
-		let sum = 0;
-		for (let channel = 0; channel < numChannels; channel++) {
-			sum += audioBuffer.getChannelData(channel)[i];
+		for (let i = 0; i < length; i++) {
+			let sum = 0;
+			for (let channel = 0; channel < numChannels; channel++) {
+				sum += audioBuffer.getChannelData(channel)[i];
+			}
+			samples[i] = sum / numChannels;
 		}
-		samples[i] = sum / numChannels;
-	}
 
-	return { samples, sampleRate: audioBuffer.sampleRate };
+		return { samples, sampleRate: audioBuffer.sampleRate };
+	} finally {
+		// Browsers cap concurrent AudioContext instances (historically ~6 in
+		// Chrome) — every uncosed context here permanently eats one of that
+		// budget. Repeatedly generating captions (each run creates one here
+		// plus one in createTimelineAudioBuffer) hit that ceiling within a
+		// handful of attempts, after which new contexts silently never
+		// produce audio — surfacing as an indefinite "Preparando áudio..."
+		// hang on a later attempt, not an error on this one.
+		void audioContext.close();
+	}
 }
 
 export interface AudibleElementCandidate {
@@ -702,54 +713,66 @@ export async function createTimelineAudioBuffer({
 	sampleRate?: number;
 	audioContext?: AudioContext;
 }): Promise<AudioBuffer | null> {
+	const ownsContext = !audioContext;
 	const context = audioContext ?? createAudioContext({ sampleRate });
 
-	const audioElements = await collectAudioElements({
-		tracks,
-		mediaAssets,
-		audioContext: context,
-	});
+	try {
+		const audioElements = await collectAudioElements({
+			tracks,
+			mediaAssets,
+			audioContext: context,
+		});
 
-	if (audioElements.length === 0) return null;
+		if (audioElements.length === 0) return null;
 
-	const outputChannels = 2;
-	const durationSeconds = duration / TICKS_PER_SECOND;
-	const outputLength = Math.ceil(durationSeconds * sampleRate);
-	const outputBuffer = context.createBuffer(
-		outputChannels,
-		outputLength,
-		sampleRate,
-	);
-
-	for (const element of audioElements) {
-		if (element.muted) continue;
-
-		const renderedBuffer = shouldMaintainPitch({
-			rate: element.retime?.rate ?? 1,
-			maintainPitch: element.retime?.maintainPitch,
-		})
-			? await renderRetimedBuffer({
-					audioContext: context,
-					sourceBuffer: element.buffer,
-					trimStart: element.trimStart,
-					clipDuration: element.duration,
-					retime: element.retime,
-					maintainPitch: true,
-				})
-			: undefined;
-
-		mixAudioChannels({
-			element,
-			buffer: renderedBuffer ?? element.buffer,
-			trimStart: renderedBuffer ? 0 : element.trimStart,
-			retime: renderedBuffer ? undefined : element.retime,
-			outputBuffer,
+		const outputChannels = 2;
+		const durationSeconds = duration / TICKS_PER_SECOND;
+		const outputLength = Math.ceil(durationSeconds * sampleRate);
+		const outputBuffer = context.createBuffer(
+			outputChannels,
 			outputLength,
 			sampleRate,
-		});
-	}
+		);
 
-	return await applyAudioMasteringToBuffer({ audioBuffer: outputBuffer });
+		for (const element of audioElements) {
+			if (element.muted) continue;
+
+			const renderedBuffer = shouldMaintainPitch({
+				rate: element.retime?.rate ?? 1,
+				maintainPitch: element.retime?.maintainPitch,
+			})
+				? await renderRetimedBuffer({
+						audioContext: context,
+						sourceBuffer: element.buffer,
+						trimStart: element.trimStart,
+						clipDuration: element.duration,
+						retime: element.retime,
+						maintainPitch: true,
+					})
+				: undefined;
+
+			mixAudioChannels({
+				element,
+				buffer: renderedBuffer ?? element.buffer,
+				trimStart: renderedBuffer ? 0 : element.trimStart,
+				retime: renderedBuffer ? undefined : element.retime,
+				outputBuffer,
+				outputLength,
+				sampleRate,
+			});
+		}
+
+		return await applyAudioMasteringToBuffer({ audioBuffer: outputBuffer });
+	} finally {
+		// Only close a context we created ourselves — a caller-provided one
+		// is theirs to manage (they may reuse it for more work afterward).
+		// Every self-created context left open here permanently consumes one
+		// slot of the browser's concurrent-AudioContext budget; see the
+		// matching note in decodeAudioToFloat32.
+		if (ownsContext) {
+			void context.close();
+		}
+	}
 }
 
 /** Averages all channels down to a single mono channel — used when the export's "Canais" option is set to Mono. */

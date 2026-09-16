@@ -102,6 +102,7 @@ export const useLocalAudioLibraryStore = create<LocalAudioLibraryStore>((set, ge
 			const arrayBuffer = await response.arrayBuffer();
 			const audioContext = new AudioContext();
 			const buffer = await audioContext.decodeAudioData(arrayBuffer.slice(0));
+			void audioContext.close();
 
 			const element = buildLibraryAudioElement({
 				sourceUrl,

@@ -224,6 +224,7 @@ export const useSoundsStore = create<SoundsStore>((set, get) => ({
 			const arrayBuffer = await response.arrayBuffer();
 			const audioContext = new AudioContext();
 			const buffer = await audioContext.decodeAudioData(arrayBuffer);
+			void audioContext.close();
 
 			const element = buildLibraryAudioElement({
 				sourceUrl: audioUrl,

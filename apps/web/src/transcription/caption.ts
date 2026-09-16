@@ -4,6 +4,17 @@ import {
 	MIN_CAPTION_DURATION_SECONDS,
 } from "@/transcription/caption-defaults";
 
+/**
+ * `segments` here are word-level (one entry per word — see worker.ts's
+ * `return_timestamps: "word"`), each with the model's own real start/end for
+ * that word. Grouping every `wordsPerChunk` words and taking the first
+ * word's start / last word's end gives each caption its actual timing
+ * directly from the model, instead of the previous approach of linearly
+ * guessing word positions within a whole-sentence timestamp — which drifted
+ * out of sync whenever a sentence contained a pause the model didn't
+ * segment on (worse for non-English audio, where Whisper's segment
+ * boundaries are already looser than for English).
+ */
 export function buildCaptionChunks({
 	segments,
 	wordsPerChunk = DEFAULT_WORDS_PER_CAPTION,
@@ -13,36 +24,23 @@ export function buildCaptionChunks({
 	wordsPerChunk?: number;
 	minDuration?: number;
 }): CaptionChunk[] {
+	const words = segments.filter((word) => word.text.trim() !== "");
 	const captions: CaptionChunk[] = [];
 	let globalEndTime = 0;
 
-	for (const segment of segments) {
-		const words = segment.text.trim().split(/\s+/);
-		if (words.length === 0 || (words.length === 1 && words[0] === "")) continue;
+	for (let i = 0; i < words.length; i += wordsPerChunk) {
+		const group = words.slice(i, i + wordsPerChunk);
+		const text = group.map((word) => word.text.trim()).join(" ");
+		const startTime = Math.max(group[0].start, globalEndTime);
+		const endTime = Math.max(startTime + minDuration, group[group.length - 1].end);
 
-		const segmentDuration = segment.end - segment.start;
-		const wordsPerSecond = words.length / segmentDuration;
+		captions.push({
+			text,
+			startTime,
+			duration: endTime - startTime,
+		});
 
-		const chunks: string[] = [];
-		for (let i = 0; i < words.length; i += wordsPerChunk) {
-			chunks.push(words.slice(i, i + wordsPerChunk).join(" "));
-		}
-
-		let chunkStartTime = segment.start;
-		for (const chunk of chunks) {
-			const chunkWords = chunk.split(/\s+/).length;
-			const chunkDuration = Math.max(minDuration, chunkWords / wordsPerSecond);
-			const adjustedStartTime = Math.max(chunkStartTime, globalEndTime);
-
-			captions.push({
-				text: chunk,
-				startTime: adjustedStartTime,
-				duration: chunkDuration,
-			});
-
-			globalEndTime = adjustedStartTime + chunkDuration;
-			chunkStartTime += chunkDuration;
-		}
+		globalEndTime = endTime;
 	}
 
 	return captions;
