@@ -42,6 +42,17 @@ export function AssetsPanel() {
 			 */}
 			<div
 				className={cn(
+					// `flex` is load-bearing: without it, this div lays out its two
+					// children (the vertical Separator and the actual panel
+					// content) in normal block flow instead of side by side — the
+					// Separator's `h-full` then resolves against the parent's own
+					// height and it renders as a full-height block spacer ABOVE
+					// the content instead of a slim divider beside it, pushing
+					// every tool panel's real content (Mídia's drop zone,
+					// Legendas' blocks, Ajustes' sliders, ...) below the visible
+					// viewport — needing to scroll past empty space just to see
+					// content that should already be on screen.
+					//
 					// A hard floor on the actual tool-panel content (Legendas'
 					// caption blocks, Ajustes, etc.) — the surrounding
 					// ResizablePanel's drag handle is percentage-based (see
@@ -51,7 +62,7 @@ export function AssetsPanel() {
 					// text). Below this, the Preview panel gives up space
 					// instead. Only applies when expanded — `hidden` above
 					// still lets the collapsed icon rail go narrower.
-					"min-w-[280px] flex-1 overflow-hidden",
+					"flex min-w-[280px] flex-1 overflow-hidden",
 					sidebarCollapsed && "hidden",
 				)}
 			>
