@@ -28,3 +28,13 @@ export function getAudioLibraryDir(): string {
 export function getAudioLibraryIndexPath(): string {
 	return path.join(getAudioLibraryDir(), "index.json");
 }
+
+// Regenerable disk cache for HEVC/undecodable-source proxy media (see
+// server/proxy-jobs.ts). Unlike the audio library above, this is CACHE, not
+// a source of truth — safe to delete entirely at any time; PronixCut just
+// regenerates proxies on demand the next time they're needed.
+export function getProxyCacheDir(): string {
+	const dir = path.join(getAppDataRoot(), "proxy-cache");
+	fs.mkdirSync(dir, { recursive: true });
+	return dir;
+}

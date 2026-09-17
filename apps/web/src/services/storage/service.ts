@@ -90,6 +90,10 @@ class StorageService {
 		await this.migrationsPromise;
 	}
 
+	private getProxyFileKey({ mediaId }: { mediaId: string }): string {
+		return `${mediaId}__proxy-preview`;
+	}
+
 	private getProjectMediaAdapters({ projectId }: { projectId: string }) {
 		const mediaMetadataAdapter = new IndexedDBAdapter<MediaAssetData>({
 			dbName: `${this.config.mediaDb}-${projectId}`,
@@ -305,6 +309,12 @@ class StorageService {
 			duration: mediaAsset.duration,
 			thumbnailUrl: mediaAsset.thumbnailUrl,
 			ephemeral: mediaAsset.ephemeral,
+			codec: mediaAsset.codec,
+			canDecodeDirectly: mediaAsset.canDecodeDirectly,
+			previewProxyStatus: mediaAsset.previewProxyStatus,
+			previewProxyError: mediaAsset.previewProxyError,
+			previewProxyWidth: mediaAsset.previewProxyWidth,
+			previewProxyHeight: mediaAsset.previewProxyHeight,
 		};
 
 		try {
@@ -350,6 +360,23 @@ class StorageService {
 
 		if (!file || !metadata) return null;
 
+		let previewProxyFile: File | undefined;
+		let previewProxyStatus = metadata.previewProxyStatus;
+		if (previewProxyStatus === "ready") {
+			const proxyFile = await mediaAssetsAdapter
+				.get(this.getProxyFileKey({ mediaId: id }))
+				.catch(() => null);
+			if (proxyFile) {
+				previewProxyFile = proxyFile;
+			} else {
+				// Proxy cache entry missing (e.g. project reopened on another
+				// machine, or cache was cleared) — not corruption, just a cache
+				// miss. Falls back to "pending" so the normal automatic
+				// generation flow re-kicks in instead of showing a broken state.
+				previewProxyStatus = "pending";
+			}
+		}
+
 		let url: string;
 		if (metadata.type === "image" && (!file.type || file.type === "")) {
 			try {
@@ -378,7 +405,78 @@ class StorageService {
 			duration: metadata.duration,
 			thumbnailUrl: metadata.thumbnailUrl,
 			ephemeral: metadata.ephemeral,
+			codec: metadata.codec,
+			canDecodeDirectly: metadata.canDecodeDirectly,
+			previewProxyStatus,
+			previewProxyError: metadata.previewProxyError,
+			previewProxyWidth: metadata.previewProxyWidth,
+			previewProxyHeight: metadata.previewProxyHeight,
+			previewProxyFile,
 		};
+	}
+
+	async saveProxyFile({
+		projectId,
+		mediaId,
+		file,
+	}: {
+		projectId: string;
+		mediaId: string;
+		file: File;
+	}): Promise<void> {
+		const { mediaAssetsAdapter } = this.getProjectMediaAdapters({ projectId });
+		await mediaAssetsAdapter.set({
+			key: this.getProxyFileKey({ mediaId }),
+			value: file,
+		});
+	}
+
+	async loadProxyFile({
+		projectId,
+		mediaId,
+	}: {
+		projectId: string;
+		mediaId: string;
+	}): Promise<File | null> {
+		const { mediaAssetsAdapter } = this.getProjectMediaAdapters({ projectId });
+		return mediaAssetsAdapter.get(this.getProxyFileKey({ mediaId }));
+	}
+
+	async deleteProxyFile({
+		projectId,
+		mediaId,
+	}: {
+		projectId: string;
+		mediaId: string;
+	}): Promise<void> {
+		const { mediaAssetsAdapter } = this.getProjectMediaAdapters({ projectId });
+		await mediaAssetsAdapter.remove(this.getProxyFileKey({ mediaId }));
+	}
+
+	async updateMediaAssetMetadata({
+		projectId,
+		mediaAsset,
+	}: {
+		projectId: string;
+		mediaAsset: MediaAsset;
+	}): Promise<void> {
+		const { mediaMetadataAdapter } = this.getProjectMediaAdapters({ projectId });
+		const existing = await mediaMetadataAdapter.get(mediaAsset.id);
+		if (!existing) return;
+
+		await mediaMetadataAdapter.set({
+			key: mediaAsset.id,
+			value: {
+				...existing,
+				codec: mediaAsset.codec,
+				canDecodeDirectly: mediaAsset.canDecodeDirectly,
+				previewProxyStatus: mediaAsset.previewProxyStatus,
+				previewProxyError: mediaAsset.previewProxyError,
+				previewProxyWidth: mediaAsset.previewProxyWidth,
+				previewProxyHeight: mediaAsset.previewProxyHeight,
+				thumbnailUrl: mediaAsset.thumbnailUrl ?? existing.thumbnailUrl,
+			},
+		});
 	}
 
 	async loadAllMediaAssets({
@@ -415,6 +513,7 @@ class StorageService {
 
 		await Promise.all([
 			mediaAssetsAdapter.remove(id),
+			mediaAssetsAdapter.remove(this.getProxyFileKey({ mediaId: id })),
 			mediaMetadataAdapter.remove(id),
 		]);
 	}

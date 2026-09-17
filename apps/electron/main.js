@@ -36,6 +36,20 @@ const appResourcesRoot = app.isPackaged
 	: path.join(__dirname, "resources", "app");
 const webRoot = path.join(appResourcesRoot, "apps", "web");
 const serverEntry = path.join(webRoot, "server.js");
+// Copied in by scripts/prepare-standalone.js's copyFfmpegBinaries() (Next's
+// standalone tracer can't capture these on its own — see that function's
+// comment). Used for the HEVC/H.265 proxy pipeline; ffmpeg-paths.ts falls
+// back to resolving the npm packages directly if these don't exist (e.g. a
+// dev checkout where prepare:web hasn't been run yet).
+const ffmpegBinDir = path.join(appResourcesRoot, "ffmpeg-bin");
+const bundledFfmpegPath = path.join(
+	ffmpegBinDir,
+	process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg",
+);
+const bundledFfprobePath = path.join(
+	ffmpegBinDir,
+	process.platform === "win32" ? "ffprobe.exe" : "ffprobe",
+);
 
 function loadEnvFile(filePath) {
 	const env = {};
@@ -125,6 +139,8 @@ function startServer() {
 			// library) persist real files under Electron's per-user app data
 			// folder instead of somewhere inside the project checkout.
 			PRONIX_USER_DATA_DIR: userDataDir,
+			PRONIX_FFMPEG_PATH: bundledFfmpegPath,
+			PRONIX_FFPROBE_PATH: bundledFfprobePath,
 		},
 		silent: true,
 	});

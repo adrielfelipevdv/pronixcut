@@ -36,6 +36,17 @@ export class VideoCache {
 	private initPromises = new Map<string, Promise<void>>();
 	private frameChain = new Map<string, Promise<unknown>>();
 	private seekGenerations = new Map<string, number>();
+	// Tracks which exact File (by identity signature) most recently failed
+	// to decode for a given mediaId, so a source that can't decode (e.g. an
+	// undecodable HEVC original with no proxy ready yet) doesn't retry
+	// init — and log a fresh error — on every single render tick. Cleared
+	// automatically once a *different* file (e.g. a freshly-ready proxy)
+	// comes in for the same mediaId.
+	private failedFileSignatures = new Map<string, string>();
+
+	private getFileSignature({ file }: { file: File }): string {
+		return `${file.name}|${file.size}|${file.lastModified}`;
+	}
 
 	async getFrameAt({
 		mediaId,
@@ -46,7 +57,17 @@ export class VideoCache {
 		file: File;
 		time: number;
 	}): Promise<WrappedCanvas | null> {
-		await this.ensureSink({ mediaId, file });
+		const signature = this.getFileSignature({ file });
+		if (this.failedFileSignatures.get(mediaId) === signature) {
+			return null;
+		}
+
+		try {
+			await this.ensureSink({ mediaId, file });
+		} catch {
+			this.failedFileSignatures.set(mediaId, signature);
+			return null;
+		}
 
 		const sinkData = this.sinks.get(mediaId);
 		if (!sinkData) return null;
@@ -350,6 +371,7 @@ export class VideoCache {
 		this.initPromises.delete(mediaId);
 		this.frameChain.delete(mediaId);
 		this.seekGenerations.delete(mediaId);
+		this.failedFileSignatures.delete(mediaId);
 	}
 
 	clearAll(): void {

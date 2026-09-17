@@ -27,6 +27,8 @@ import { SidePreviewPane } from "./side-preview";
 import { useSidePreviewStore } from "@/preview/side-preview-store";
 import { usePreviewStore } from "@/preview/preview-store";
 import { resolveEffectivePreviewResolution } from "@/preview/preview-resolution-scale";
+import { resolvePlaybackMediaAssets } from "@/media/playback-source";
+import { hasMediaId } from "@/timeline/element-utils";
 
 function usePreviewSize() {
 	const canvasSize = useEditor(
@@ -181,6 +183,26 @@ function PreviewQualityBadge({ label }: { label: string | null }) {
 	);
 }
 
+// Shown in place of the black frame a browser-undecodable source (HEVC/H.265
+// etc.) would otherwise leave on screen while its H.264 proxy is generated —
+// see MediaManager.startPreviewProxyGeneration.
+function ProxyPreparingOverlay({ progress }: { progress: number | undefined }) {
+	return (
+		<div className="pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-black/85 px-6 text-center text-white">
+			<div className="size-8 animate-spin rounded-full border-[3px] border-white/20 border-t-white" />
+			<p className="text-sm font-medium">Preparando vídeo para edição...</p>
+			{typeof progress === "number" && (
+				<div className="h-1.5 w-48 overflow-hidden rounded-full bg-white/20">
+					<div
+						className="h-full rounded-full bg-white transition-[width]"
+						style={{ width: `${Math.round(Math.min(100, Math.max(0, progress)))}%` }}
+					/>
+				</div>
+			)}
+		</div>
+	);
+}
+
 function RenderTreeController() {
 	const editor = useEditor();
 	const tracks = useEditor(
@@ -201,9 +223,13 @@ function RenderTreeController() {
 		}
 
 		const duration = editor.timeline.getTotalDuration();
+		const playbackMediaAssets = resolvePlaybackMediaAssets({
+			mediaAssets,
+			proxyFileByMediaId: (asset) => asset.previewProxyFile,
+		});
 		const renderTree = buildScene({
 			tracks,
-			mediaAssets,
+			mediaAssets: playbackMediaAssets,
 			duration,
 			canvasSize: { width: renderWidth, height: renderHeight },
 			background: activeProject.settings.background,
@@ -254,6 +280,24 @@ function PreviewCanvas({
 	const editor = useEditor();
 	const activeProject = useEditor((e) => e.project.getActive());
 	const renderTree = useEditor((e) => e.renderer.getRenderTree());
+	const mediaAssets = useEditor((e) => e.media.getAssets());
+	const previewTracks = useEditor(
+		(e) => e.timeline.getPreviewTracks() ?? e.scenes.getActiveScene().tracks,
+	);
+	const preparingAsset = useMemo(() => {
+		const usedMediaIds = new Set<string>();
+		for (const track of [...previewTracks.overlay, previewTracks.main]) {
+			for (const element of track.elements) {
+				if (hasMediaId(element)) usedMediaIds.add(element.mediaId);
+			}
+		}
+		return mediaAssets.find(
+			(asset) =>
+				usedMediaIds.has(asset.id) &&
+				(asset.previewProxyStatus === "pending" ||
+					asset.previewProxyStatus === "generating"),
+		);
+	}, [mediaAssets, previewTracks]);
 	// Viewport/CSS sizing and pointer↔canvas conversion (drag handles, zoom,
 	// pan) always use the project's real canvasSize (`nativeWidth/Height`) —
 	// never the reduced preview render size — so the Viewer's on-screen
@@ -454,6 +498,9 @@ function PreviewCanvas({
 											: activeProject?.settings.background.color,
 								}}
 							/>
+								{preparingAsset && (
+									<ProxyPreparingOverlay progress={preparingAsset.previewProxyProgress} />
+								)}
 								<PreviewOverlayLayer
 									instances={overlayInstances}
 									plane="under-interaction"

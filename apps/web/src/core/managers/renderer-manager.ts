@@ -9,6 +9,9 @@ import { createTimelineAudioBuffer, downmixAudioBufferToMono } from "@/media/aud
 import { formatTimecode } from "opencut-wasm";
 import { frameRateToFloat } from "@/fps/utils";
 import { downloadBlob } from "@/utils/browser";
+import { resolvePlaybackMediaAssets } from "@/media/playback-source";
+import { videoCache } from "@/services/video-cache/service";
+import { toast } from "sonner";
 
 type SnapshotResult =
 	| { success: true; blob: Blob; filename: string }
@@ -230,12 +233,44 @@ export class RendererManager {
 				}
 			}
 
+			// This app's entire render/export pipeline decodes video through
+			// WebCodecs (mediabunny), not ffmpeg — there is no server-side
+			// render path. Sources the browser can't decode at all (HEVC/H.265
+			// etc.) therefore can't be exported from their original bytes; the
+			// best available fallback is a high-quality, near-original-
+			// resolution H.264 proxy (see MediaManager.getOrCreateExportProxy),
+			// not a silent crash or the lightweight preview proxy.
+			const undecodableAssets = mediaAssets.filter(
+				(asset) => asset.type === "video" && asset.canDecodeDirectly === false,
+			);
+			if (undecodableAssets.length > 0) {
+				toast.info(
+					"Alguns clipes usam HEVC; a exportação usará uma versão convertida em H.264 próxima da qualidade original, pois o navegador não decodifica HEVC diretamente.",
+				);
+			}
+
+			const exportProxyByMediaId = new Map<string, File>();
+			for (const asset of undecodableAssets) {
+				const proxyFile = await this.editor.media.getOrCreateExportProxy({ asset });
+				exportProxyByMediaId.set(asset.id, proxyFile);
+				// Forces a fresh decoder for the export-quality proxy instead of
+				// reusing whatever sink is already cached for this mediaId from
+				// live preview (which would otherwise silently keep using the
+				// lightweight preview proxy — see video-cache/service.ts).
+				videoCache.clearVideo({ mediaId: asset.id });
+			}
+
+			const exportMediaAssets = resolvePlaybackMediaAssets({
+				mediaAssets,
+				proxyFileByMediaId: (asset) => exportProxyByMediaId.get(asset.id),
+			});
+
 			// canvasSize/background still drive scene composition at the
 			// project's own coordinate space — the export CanvasRenderer below
 			// is what actually resizes the output to `resolved` width/height.
 			const scene = buildScene({
 				tracks,
-				mediaAssets,
+				mediaAssets: exportMediaAssets,
 				duration,
 				canvasSize: activeProject.settings.canvasSize,
 				background: activeProject.settings.background,
@@ -291,6 +326,9 @@ export class RendererManager {
 				};
 			} finally {
 				clearInterval(cancelInterval);
+				for (const asset of undecodableAssets) {
+					videoCache.clearVideo({ mediaId: asset.id });
+				}
 			}
 		} catch (error) {
 			console.error("Export failed:", error);

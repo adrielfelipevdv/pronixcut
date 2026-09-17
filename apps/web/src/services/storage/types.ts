@@ -14,6 +14,13 @@ export interface StorageAdapter<T> {
 	clear(): Promise<void>;
 }
 
+export type PreviewProxyStatus =
+	| "not-needed"
+	| "pending"
+	| "generating"
+	| "ready"
+	| "error";
+
 export interface MediaAssetData {
 	id: string;
 	name: string;
@@ -27,6 +34,12 @@ export interface MediaAssetData {
 	hasAudio?: boolean;
 	ephemeral?: boolean;
 	thumbnailUrl?: string;
+	codec?: string | null;
+	canDecodeDirectly?: boolean;
+	previewProxyStatus?: PreviewProxyStatus;
+	previewProxyError?: string | null;
+	previewProxyWidth?: number | null;
+	previewProxyHeight?: number | null;
 }
 
 export type SerializedScene = Omit<TScene, "createdAt" | "updatedAt"> & {

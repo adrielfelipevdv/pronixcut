@@ -5,14 +5,151 @@ import { storageService } from "@/services/storage/service";
 import { generateUUID } from "@/utils/id";
 import { videoCache } from "@/services/video-cache/service";
 import { waveformCache } from "@/services/waveform-cache/service";
+import { generateProxyFile } from "@/media/proxy-client";
 import { BatchCommand, RemoveMediaAssetCommand } from "@/commands";
 
 export class MediaManager {
 	private assets: MediaAsset[] = [];
 	private isLoading = false;
 	private listeners = new Set<() => void>();
+	// Export proxies aren't persisted (see proxy-client.ts) — they're
+	// regenerated lazily per export run and kept here only for the
+	// duration of that run's frame loop.
+	private exportProxyFiles = new Map<string, File>();
 
 	constructor(private editor: EditorCore) {}
+
+	private async startPreviewProxyGeneration({
+		projectId,
+		asset,
+	}: {
+		projectId: string;
+		asset: MediaAsset;
+	}): Promise<void> {
+		this.updateAsset({
+			id: asset.id,
+			patch: { previewProxyStatus: "generating", previewProxyProgress: 0 },
+		});
+
+		try {
+			const proxyFile = await generateProxyFile({
+				sourceFile: asset.file,
+				purpose: "preview",
+				proxyFileName: `${asset.id}-preview-proxy.mp4`,
+				onProgress: (progress) => {
+					this.updateAsset({
+						id: asset.id,
+						patch: { previewProxyProgress: progress },
+					});
+				},
+			});
+
+			await storageService.saveProxyFile({
+				projectId,
+				mediaId: asset.id,
+				file: proxyFile,
+			});
+
+			videoCache.clearVideo({ mediaId: asset.id });
+			this.updateAsset({
+				id: asset.id,
+				patch: {
+					previewProxyStatus: "ready",
+					previewProxyProgress: 100,
+					previewProxyFile: proxyFile,
+					previewProxyError: null,
+				},
+			});
+			await this.persistProxyMetadata({ projectId, id: asset.id });
+		} catch (error) {
+			const message =
+				error instanceof Error ? error.message : "Não foi possível preparar este vídeo para edição.";
+
+			this.updateAsset({
+				id: asset.id,
+				patch: { previewProxyStatus: "error", previewProxyError: message },
+			});
+			await this.persistProxyMetadata({ projectId, id: asset.id });
+
+			const details = [
+				asset.codec?.toUpperCase(),
+				asset.width && asset.height ? `${asset.width}x${asset.height}` : null,
+			]
+				.filter(Boolean)
+				.join(", ");
+
+			toast.error("Não foi possível preparar este vídeo para edição.", {
+				description: `${asset.name}${details ? ` (${details})` : ""} — ${message}`,
+				action: {
+					label: "Tentar novamente",
+					onClick: () => {
+						void this.retryPreviewProxy({ projectId, id: asset.id });
+					},
+				},
+			});
+		}
+	}
+
+	async retryPreviewProxy({
+		projectId,
+		id,
+	}: {
+		projectId: string;
+		id: string;
+	}): Promise<void> {
+		const asset = this.assets.find((a) => a.id === id);
+		if (!asset) return;
+		await this.startPreviewProxyGeneration({ projectId, asset });
+	}
+
+	private async persistProxyMetadata({
+		projectId,
+		id,
+	}: {
+		projectId: string;
+		id: string;
+	}): Promise<void> {
+		const asset = this.assets.find((a) => a.id === id);
+		if (!asset) return;
+		await storageService.updateMediaAssetMetadata({ projectId, mediaAsset: asset }).catch((error) => {
+			console.error("Failed to persist proxy metadata:", error);
+		});
+	}
+
+	private updateAsset({
+		id,
+		patch,
+	}: {
+		id: string;
+		patch: Partial<MediaAsset>;
+	}): void {
+		this.assets = this.assets.map((asset) =>
+			asset.id === id ? { ...asset, ...patch } : asset,
+		);
+		this.notify();
+	}
+
+	async getOrCreateExportProxy({
+		asset,
+	}: {
+		asset: MediaAsset;
+	}): Promise<File> {
+		const cached = this.exportProxyFiles.get(asset.id);
+		if (cached) return cached;
+
+		const proxyFile = await generateProxyFile({
+			sourceFile: asset.file,
+			purpose: "export",
+			proxyFileName: `${asset.id}-export-proxy.mp4`,
+		});
+
+		this.exportProxyFiles.set(asset.id, proxyFile);
+		return proxyFile;
+	}
+
+	clearExportProxies(): void {
+		this.exportProxyFiles.clear();
+	}
 
 	async addMediaAsset({
 		projectId,
@@ -34,6 +171,11 @@ export class MediaManager {
 			this.editor.project.ratchetFpsForImportedMedia({
 				importedAssets: [newAsset],
 			});
+
+			if (newAsset.previewProxyStatus === "pending") {
+				void this.startPreviewProxyGeneration({ projectId, asset: newAsset });
+			}
+
 			return newAsset;
 		} catch (error) {
 			console.error("Failed to save media asset:", error);
@@ -132,6 +274,7 @@ export class MediaManager {
 	clearAllAssets(): void {
 		videoCache.clearAll();
 		waveformCache.clearAll();
+		this.exportProxyFiles.clear();
 
 		this.assets.forEach((asset) => {
 			if (asset.url) {

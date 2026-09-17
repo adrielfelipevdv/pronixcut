@@ -74,6 +74,56 @@ function countSymlinks(dir) {
 	return count;
 }
 
+// The HEVC/H.265 proxy pipeline (apps/web/src/server/ffmpeg-paths.ts) needs
+// a real ffmpeg/ffprobe binary at runtime that doesn't depend on the end
+// user having either installed. Next's file-tracer never captures these —
+// they're only ever reached via require("ffmpeg-static") returning a path
+// *string*, not an actual module load — so they have to be copied in here
+// explicitly, from wherever bun's workspace hoisting actually put them
+// (usually the repo root's node_modules, not apps/web's).
+function resolvePackageMain(packageName) {
+	const candidateRoots = [REPO_ROOT, WEB_DIR];
+	for (const root of candidateRoots) {
+		const candidate = path.join(root, "node_modules", packageName);
+		if (fs.existsSync(candidate)) {
+			// eslint-disable-next-line import/no-dynamic-require, global-require
+			return require(candidate);
+		}
+	}
+	return null;
+}
+
+function copyFfmpegBinaries() {
+	const destDir = path.join(OUT_DIR, "ffmpeg-bin");
+	fs.mkdirSync(destDir, { recursive: true });
+
+	const ffmpegPath = resolvePackageMain("ffmpeg-static");
+	const ffprobeModule = resolvePackageMain("ffprobe-static");
+	const ffprobePath = ffprobeModule?.path ?? null;
+
+	if (!ffmpegPath || !fs.existsSync(ffmpegPath)) {
+		fail(
+			`ffmpeg-static did not resolve to an existing binary (${ffmpegPath}). Run "bun install" (with network access, so its postinstall can download the binary) before packaging.`,
+		);
+	}
+	if (!ffprobePath || !fs.existsSync(ffprobePath)) {
+		fail(`ffprobe-static did not resolve to an existing binary (${ffprobePath}).`);
+	}
+
+	const ffmpegDestName = process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg";
+	const ffprobeDestName = process.platform === "win32" ? "ffprobe.exe" : "ffprobe";
+
+	fs.copyFileSync(ffmpegPath, path.join(destDir, ffmpegDestName));
+	fs.copyFileSync(ffprobePath, path.join(destDir, ffprobeDestName));
+
+	if (process.platform !== "win32") {
+		fs.chmodSync(path.join(destDir, ffmpegDestName), 0o755);
+		fs.chmodSync(path.join(destDir, ffprobeDestName), 0o755);
+	}
+
+	console.log(`[prepare-standalone] Copied ffmpeg/ffprobe binaries -> ${destDir}`);
+}
+
 function main() {
 	if (!fs.existsSync(STANDALONE_SRC)) {
 		fail(
@@ -116,6 +166,8 @@ function main() {
 	if (!fs.existsSync(serverEntry)) {
 		fail(`Expected server entrypoint missing: ${serverEntry}`);
 	}
+
+	copyFfmpegBinaries();
 
 	// Bun keeps a "flat hoist" layer at node_modules/.bun/node_modules/* —
 	// real content for `.bun/node_modules/x` entries, symlinks for others —

@@ -3,23 +3,12 @@ import { getMediaTypeFromFile } from "@/media/media-utils";
 import { formatStorageBytes } from "@/services/storage/quota";
 import { storageService } from "@/services/storage/service";
 import type { MediaAsset } from "@/media/types";
+import type { PreviewProxyStatus } from "@/services/storage/types";
 import { readVideoFile } from "./mediabunny";
-import type { VideoFileData } from "./mediabunny";
+import { generateThumbnail } from "./proxy-client";
 import { renderThumbnailDataUrl } from "./thumbnail";
 
 export interface ProcessedMediaAsset extends Omit<MediaAsset, "id"> {}
-
-const getUnsupportedVideoDescription = ({
-	codec,
-}: {
-	codec: VideoFileData["codec"];
-}): string => {
-	const codecLabel = codec ? codec.toUpperCase() : "este codec de vídeo";
-
-	return codec === "hevc"
-		? `${codecLabel} não pode ser decodificado neste navegador, então este clipe pode não ter uma pré-visualização correta. Converta-o para H.264 MP4 ou tente importá-lo no Safari.`
-		: `${codecLabel} não pode ser decodificado neste navegador, então este clipe pode não ter uma pré-visualização correta. Converta-o para H.264 MP4 e reimporte-o.`;
-};
 
 const getStorageLimitDescription = ({
 	fileSize,
@@ -124,6 +113,9 @@ export async function processMediaAssets({
 		let height: number | undefined;
 		let fps: number | undefined;
 		let hasAudio: boolean | undefined;
+		let codec: string | undefined;
+		let canDecodeDirectly: boolean | undefined;
+		let previewProxyStatus: PreviewProxyStatus | undefined;
 
 		try {
 			if (fileType === "image") {
@@ -142,13 +134,20 @@ export async function processMediaAssets({
 						: undefined;
 					hasAudio = videoData.hasAudio;
 					thumbnailUrl = videoData.thumbnailUrl ?? undefined;
+					codec = videoData.codec ?? undefined;
+					canDecodeDirectly = videoData.canDecode;
 
 					if (!videoData.canDecode) {
-						toast.error(`Não é possível pré-visualizar ${file.name}`, {
-							description: getUnsupportedVideoDescription({
-								codec: videoData.codec,
-							}),
-						});
+						// The browser can't decode this source directly (typically
+						// HEVC/H.265) — PronixCut handles this itself by generating
+						// an H.264 proxy automatically (see MediaManager's
+						// startPreviewProxyGeneration, kicked off once this asset is
+						// actually added). No blocking toast here: it's automatic
+						// and the user shouldn't need to know what a codec is.
+						previewProxyStatus = "pending";
+						thumbnailUrl = (await generateThumbnail({ file })) ?? undefined;
+					} else {
+						previewProxyStatus = "not-needed";
 					}
 				} catch (error) {
 					const message =
@@ -175,6 +174,9 @@ export async function processMediaAssets({
 				height,
 				fps,
 				hasAudio,
+				codec,
+				canDecodeDirectly,
+				previewProxyStatus,
 			});
 
 			await new Promise((resolve) => setTimeout(resolve, 0));
