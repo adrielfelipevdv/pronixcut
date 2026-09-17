@@ -18,6 +18,13 @@ on:
 jobs:
   build-windows:
     runs-on: windows-latest
+    # electron-builder's --publish step creates a GitHub Release via the
+    # REST API using GH_TOKEN (the default GITHUB_TOKEN). Without this,
+    # repos with the org/repo default token permission set to read-only
+    # get a 403 "Resource not accessible by integration" on release
+    # creation even though the token belongs to this same repo.
+    permissions:
+      contents: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
