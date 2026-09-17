@@ -80,9 +80,18 @@ jobs:
         run: npm install --no-workspaces
 
       - name: Build & publish (release)
+        # Deliberately not `npm run dist -- --publish always`: that forwards
+        # the extra args through two nested `npm run` calls (dist -> dist:win),
+        # and on Windows' cmd.exe that mangles the arg list — `--publish`
+        # vanishes and `always` gets fed to `--win` instead, which
+        # electron-builder rejects as an unknown build target. Calling each
+        # step directly avoids the double indirection.
         if: startsWith(github.ref, 'refs/tags/v')
         working-directory: apps/electron
-        run: npm run dist -- --publish always
+        run: |
+          npm run build:web
+          npm run prepare:web
+          npx electron-builder --win --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
