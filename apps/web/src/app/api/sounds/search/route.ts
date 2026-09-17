@@ -149,6 +149,13 @@ function transformFreesoundResult(
 
 export async function GET(request: NextRequest) {
 	try {
+		if (!webEnv.FREESOUND_API_KEY) {
+			return NextResponse.json(
+				{ error: "Recurso indisponível nesta instalação." },
+				{ status: 501 },
+			);
+		}
+
 		const { limited } = await checkRateLimit({ request });
 		if (limited) {
 			return NextResponse.json({ error: "Too many requests" }, { status: 429 });

@@ -4,40 +4,57 @@ import { Redis } from "@upstash/redis";
 import { db } from "@/db";
 import { webEnv } from "@/env/web";
 
-const redis = new Redis({
-	url: webEnv.UPSTASH_REDIS_REST_URL,
-	token: webEnv.UPSTASH_REDIS_REST_TOKEN,
-});
+// Cloud auth (accounts, sessions) needs a real database, secret and Redis —
+// none of which the desktop app (a local video editor) requires to run.
+// When they're absent (e.g. the packaged desktop build), auth is simply
+// unavailable rather than crashing the whole server at module load.
+function buildAuth() {
+	if (
+		!db ||
+		!webEnv.BETTER_AUTH_SECRET ||
+		!webEnv.UPSTASH_REDIS_REST_URL ||
+		!webEnv.UPSTASH_REDIS_REST_TOKEN
+	) {
+		return null;
+	}
 
-export const auth = betterAuth({
-	database: drizzleAdapter(db, {
-		provider: "pg",
-		usePlural: true,
-	}),
-	secret: webEnv.BETTER_AUTH_SECRET,
-	user: {
-		deleteUser: {
+	const redis = new Redis({
+		url: webEnv.UPSTASH_REDIS_REST_URL,
+		token: webEnv.UPSTASH_REDIS_REST_TOKEN,
+	});
+
+	return betterAuth({
+		database: drizzleAdapter(db, {
+			provider: "pg",
+			usePlural: true,
+		}),
+		secret: webEnv.BETTER_AUTH_SECRET,
+		user: {
+			deleteUser: {
+				enabled: true,
+			},
+		},
+		emailAndPassword: {
 			enabled: true,
 		},
-	},
-	emailAndPassword: {
-		enabled: true,
-	},
-	rateLimit: {
-		storage: "secondary-storage",
-		customStorage: {
-			get: async (key) => {
-				const value = await redis.get(key);
-				return value as RateLimit | undefined;
-			},
-			set: async (key, value) => {
-				await redis.set(key, value);
+		rateLimit: {
+			storage: "secondary-storage",
+			customStorage: {
+				get: async (key) => {
+					const value = await redis.get(key);
+					return value as RateLimit | undefined;
+				},
+				set: async (key, value) => {
+					await redis.set(key, value);
+				},
 			},
 		},
-	},
-	baseURL: webEnv.NEXT_PUBLIC_SITE_URL,
-	appName: "PronixCut",
-	trustedOrigins: [webEnv.NEXT_PUBLIC_SITE_URL],
-});
+		baseURL: webEnv.NEXT_PUBLIC_SITE_URL,
+		appName: "PronixCut",
+		trustedOrigins: [webEnv.NEXT_PUBLIC_SITE_URL],
+	});
+}
 
-export type Auth = typeof auth;
+export const auth = buildAuth();
+
+export type Auth = NonNullable<typeof auth>;
