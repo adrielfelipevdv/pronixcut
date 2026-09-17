@@ -45,6 +45,8 @@
     "typescript-eslint": "^8.59.0"
   },
   "trustedDependencies": [
-    "@tailwindcss/oxide"
+    "@tailwindcss/oxide",
+    "ffmpeg-static",
+    "ffprobe-static"
   ]
 }
