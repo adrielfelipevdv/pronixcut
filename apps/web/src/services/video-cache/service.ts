@@ -335,8 +335,17 @@ export class VideoCache {
 				throw new Error("Video codec not supported for decoding");
 			}
 
+			// `fit` only takes effect when both `width` and `height` are set —
+			// passing the track's own display size explicitly makes mediabunny
+			// actually reconcile any mismatch between the decoder's raw/coded
+			// frame size and the track's declared display size (which some
+			// hardware decoders get wrong for unusual aspect ratios), instead of
+			// silently drawing the raw frame into a differently-proportioned
+			// canvas.
 			const sink = new CanvasSink(videoTrack, {
 				poolSize: PREFETCH_DEPTH + 2,
+				width: videoTrack.displayWidth,
+				height: videoTrack.displayHeight,
 				fit: "contain",
 			});
 
