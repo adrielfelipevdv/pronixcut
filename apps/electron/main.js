@@ -170,6 +170,7 @@ function showLoadingScreen({ pendingUpdate }) {
 	const html = `data:text/html,${encodeURIComponent(`
 		<html>
 			<head>
+				<meta charset="utf-8">
 				<style>
 					html, body {
 						height: 100%;
